@@ -4,6 +4,7 @@ from selenium.webdriver.common.keys import Keys
 import time
 import validators
 import json
+from typing import List
 
 def setup_webdriver(): 
     options = webdriver.ChromeOptions()
@@ -16,7 +17,7 @@ def setup_webdriver():
 def close_browser(driver: webdriver):
     driver.quit()
 
-def search(query: str, driver: webdriver=setup_webdriver(), url: str = "https://www.google.com"):
+def search(query: str, driver: webdriver, url: str = "https://www.google.com"):
     if not validators.url(url):
         raise ValueError(f"Invalid URL: {url}")
     try:
@@ -34,7 +35,7 @@ def search(query: str, driver: webdriver=setup_webdriver(), url: str = "https://
         print(f"Error searching for {query}: {str(e)}")
         return [], []
 
-def get_top_results(search_results, search_links, limit = 3):
+def get_top_results(search_results: List, search_links: List, limit: int = 3):
     top_results = []
     for i in range(min(len(search_results), len(search_links), limit)):
         title = search_results[i].text
@@ -42,7 +43,7 @@ def get_top_results(search_results, search_links, limit = 3):
         top_results.append((title, url))
     return top_results
 
-def extract_content(top_results, driver: webdriver=setup_webdriver()):
+def extract_content(top_results: List, driver: webdriver):
     content = []
     for i, (title, url) in enumerate(top_results, start=1):
         website = {
@@ -69,9 +70,18 @@ def extract_content(top_results, driver: webdriver=setup_webdriver()):
 
         content.append(website)
         
-        driver.quit()
+    driver.quit()
 
-        with open("content.json", "w", encoding="utf-8") as json_file:
-            json.dump(content, json_file, indent=4, ensure_ascii=False)
+    with open("content.json", "w", encoding="utf-8") as json_file:
+        json.dump(content, json_file, indent=4, ensure_ascii=False)
 
-        return content
+    return content
+    
+    
+def scrape(query: str, driver: webdriver = None, url: str = "https://www.google.com"):
+    if driver is None:
+        driver = setup_webdriver()
+    search_results, search_links = search(query, driver, url)
+    top_results = get_top_results(search_results, search_links)
+    content = extract_content(top_results, driver)
+    return content
