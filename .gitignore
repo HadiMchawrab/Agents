@@ -2,3 +2,8 @@
 
 web_scraper_env/
 csv_test
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
