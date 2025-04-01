@@ -1,9 +1,16 @@
 .vscode/
 
-web_scraper_env/
 csv_test
+
+
+web_scraper/web_scraper_env/
+web_scraper/__pycache__/
+web_scraper/tests/
 
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+
+*.db
