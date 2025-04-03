@@ -6,7 +6,7 @@ csv_test
 web_scraper/web_scraper_env/
 web_scraper/__pycache__/
 web_scraper/tests/
-
+keys.py
 __pycache__/
 *.pyc
 *.pyo
