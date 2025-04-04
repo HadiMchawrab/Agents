@@ -124,3 +124,8 @@ class WebsiteContent:
             "content": self.content,
             "sections": self.sections
         }
+
+    def to_dict_ai(self):
+        return {
+            "content": self.content
+        }
