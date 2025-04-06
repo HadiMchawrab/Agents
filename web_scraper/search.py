@@ -3,11 +3,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import validators
 from typing import List
-from web_scraper.website import WebsiteContent
+from web_scraper.website import Website
 from web_scraper.web_driver import wait_for_page
+import time
 
 
 def search(query: str, driver: webdriver, url: str = "https://www.google.com"):
+    start = time.time()
     if not validators.url(url):
         raise ValueError(f"Invalid URL: {url}")
 
@@ -28,6 +30,8 @@ def search(query: str, driver: webdriver, url: str = "https://www.google.com"):
         
         print(search_results, search_links)
 
+        end = time.time()
+        print(f"Search Time: {(end - start)} seconds")
         return search_results, search_links
 
     except Exception as e:
@@ -36,14 +40,15 @@ def search(query: str, driver: webdriver, url: str = "https://www.google.com"):
 
 
 def get_top_results(search_results: List, search_links: List, driver: webdriver, lang: str = "en", limit: int = 3):
-    top_results: List[WebsiteContent] = []
+    start = time.time()
+    top_results: str = []
     index = 0
 
     while len(top_results) < limit and index < len(search_results):
         title = search_results[index]
         url = search_links[index]
 
-        website = WebsiteContent(title=title, url=url)
+        website = Website(title=title, url=url)
 
         try:
             print(f"Extracting content from {index}")
@@ -56,4 +61,6 @@ def get_top_results(search_results: List, search_links: List, driver: webdriver,
 
         index += 1
 
+    end = time.time()
+    print(f"Extraction Time: {(end - start)} seconds")
     return top_results
