@@ -3,16 +3,17 @@
 csv_test
 
 test/
-web_scraper/web_scraper_env/
-web_scraper/__pycache__/
-web_scraper/tests/
+backend/web_scraper/web_scraper_env/
+backend/web_scraper/__pycache__/
+backend/web_scraper/tests/
 hmhm.py
-
+backend/tests_results/
 keys.py
 
-
+frontend/node_modules/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+backend/temp.db
 
