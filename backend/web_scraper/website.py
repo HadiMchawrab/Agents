@@ -1,80 +1,69 @@
+import time
+import logging
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from web_scraper.web_driver import wait_for_page
 from langdetect import detect
 from typing import List
-import time
+from tools import get_logger, timer  # Ensure these are available for use.
+
+logger = get_logger(__name__)
 
 class Website:
     def __init__(self, title: str, url: str, content: str = None):
         self.title = title
         self.url = url
-        self.content = content
-        
-    # def iframe_handler(self, driver: webdriver):
-    #     try:
-    #         iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    #         for iframe in iframes:
-    #             driver.switch_to.frame(iframe)
-    #             self.iframe_handler(driver)
-    #             driver.switch_to.default_content()
-            
-
+        self.content = content     
+    
     def check_language(self, driver: webdriver, lang: str = "en"):
-        start = time.time()
-        lang = lang[:2].lower()
+        with timer("Language check"):
+            lang = lang[:2].lower()
 
-        try:
-            html_lang = driver.find_element(By.TAG_NAME, "html").get_attribute("lang")
-            if html_lang and not html_lang.startswith(lang):
-                print(f"Skipping {self.url} due to HTML language: {html_lang}")
-                return False
-        except Exception as e:
-            print(f"Could not detect lang from HTML tag: {e}")
-        end = time.time()
-        print(f"Language check Time: {(end - start)} seconds")
-        return True
+            try:
+                html_lang = driver.find_element(By.TAG_NAME, "html").get_attribute("lang")
+                if html_lang and not html_lang.startswith(lang):
+                    logger.info(f"Skipping {self.url} due to HTML language: {html_lang}")
+                    return False
+            except Exception as e:
+                logger.error(f"Could not detect lang from HTML tag: {e}")
+            
+            return True
 
     def extract_content(self, driver: webdriver):
-        start = time.time()
-        driver.get(self.url)
-        print("Waiting for page to load")
-        wait_for_page(driver)
+        with timer("One Website Extraction Time"):
+            driver.get(self.url)
+            logger.info("Waiting for page to load")
+            wait_for_page(driver)
 
-        if not self.check_language(driver, lang="en"):
-            self.content = None
-            return
+            if not self.check_language(driver, lang="en"):
+                self.content = None
+                return
 
-        print("Language check passed!")
+            logger.info("Language check passed!")
                 
-        elements = driver.find_elements(By.XPATH, "//*")
+            elements = driver.find_elements(By.XPATH, "//*")
 
-        content = ""
-        current_heading = None
-        
-        elements = driver.find_elements(By.XPATH, "//*")
- 
-        for element in elements:
-            tag = element.tag_name.lower()
-            text = element.text.strip()
+            content = ""
+            current_heading = None
 
-            if not text:
-                continue
+            for element in elements:
+                tag = element.tag_name.lower()
+                text = element.text.strip()
 
-            if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
-                current_heading = text
-                content += f"\n{text}\n"
-            elif tag == "p":
-                current_heading = text
-                content += "\n" + current_heading + "\n"
-            elif tag == "p" and current_heading is not None:
-                content += text + "\n"
-                current_heading = None
-        self.content = content
+                if not text:
+                    continue
 
-        end = time.time()
-        print(f"One Website Extraction Time: {(end - start)} seconds")
+                if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                    current_heading = text
+                    content += f"\n{text}\n"
+                elif tag == "p":
+                    current_heading = text
+                    content += "\n" + current_heading + "\n"
+                elif tag == "p" and current_heading is not None:
+                    content += text + "\n"
+                    current_heading = None
+            self.content = content
 
     def to_dict_detailed(self):
         return {
@@ -83,11 +72,10 @@ class Website:
             "content": self.content
         }
 
-
     def to_dict_content(self):
         return {
             "content": self.content
         }
-    
+
     def __str__(self):
         return str(self.title) + " : " + str(self.content)
