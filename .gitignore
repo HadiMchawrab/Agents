@@ -2,11 +2,15 @@
 
 csv_test
 
-
+test/
 web_scraper/web_scraper_env/
 web_scraper/__pycache__/
 web_scraper/tests/
+hmhm.py
+
 keys.py
+
+
 __pycache__/
 *.pyc
 *.pyo
