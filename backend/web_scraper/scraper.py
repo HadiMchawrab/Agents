@@ -1,8 +1,8 @@
 from selenium import webdriver
-from web_scraper.web_driver import setup_webdriver, close_browser
-from web_scraper.search import search, get_top_results
-from web_scraper.output import save_results_to_json
-from tools import get_logger, timer
+from .web_driver import setup_webdriver, close_browser
+from .search import search, get_top_results
+from .output import save_results_to_json
+from .tools import get_logger, timer
 
 logger = get_logger("scraper")
 

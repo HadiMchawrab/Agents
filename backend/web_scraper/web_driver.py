@@ -2,7 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from tools import get_logger, timer
+from .tools import get_logger, timer
 
 logger = get_logger("web_driver")
 

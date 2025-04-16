@@ -3,9 +3,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import validators
 from typing import List
-from web_scraper.website import Website
-from web_scraper.web_driver import wait_for_page
-from tools import get_logger, timer
+from .website import Website
+from .web_driver import wait_for_page
+from .tools import get_logger, timer
 
 logger = get_logger("search")
 

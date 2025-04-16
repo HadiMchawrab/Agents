@@ -1,9 +1,9 @@
 import json
 from typing import List
-from web_scraper.website import Website
+from backend.web_scraper.website import Website
 import os
 import time
-from tools import get_logger, timer
+from backend.web_scraper.tools import get_logger, timer
 
 logger = get_logger("save_json")
 

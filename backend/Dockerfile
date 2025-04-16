@@ -11,11 +11,15 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . /backend/
+# Copy application code and .env file
+COPY . .
 
-EXPOSE 8000
+# Set environment variables
+ENV PYTHONPATH=/backend
+ENV PYTHONUNBUFFERED=1
 
-ENTRYPOINT ["python"]
+# Expose port
+EXPOSE 5000
 
-CMD ["app.py"] 
+# Command to run the application
+CMD ["python", "graph.py"] 

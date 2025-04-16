@@ -1,19 +1,31 @@
+import sys
+import os
+from pathlib import Path
+
+# Add the project root to the Python path
+project_root = str(Path(__file__).parent.parent)
+sys.path.append(project_root)
+
 from typing import TypedDict, List, Dict, Any
-from IPython.display import display
-from PIL import Image
+# from IPython.display import display
+# from PIL import Image
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
 from web_scraper.scraper import scrape
 import sqlite3
 import pandas as pd
-import os
 import json
 import io
 import logging
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
 class State(TypedDict):
     tables: str 
@@ -206,7 +218,7 @@ def relevance_node(state: State):
                                     ```"""),
             HumanMessage(content=f"The initial tables and columns: {state['tables']}"),
             HumanMessage(content=json.dumps(state["analyzed_topics"][i])), 
-            HumanMessage(content=f"modelsWeUse: {state["ModelsPerTopic"][topic]}")]  
+            HumanMessage(content=f"modelsWeUse: {state['ModelsPerTopic'][topic]}")]  
 
         ai_response = model.invoke(Input_messages)
         raw_content = ai_response.content.strip()

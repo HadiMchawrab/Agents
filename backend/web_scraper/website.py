@@ -3,10 +3,10 @@ import logging
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from web_scraper.web_driver import wait_for_page
+from .web_driver import wait_for_page
 from langdetect import detect
 from typing import List
-from tools import get_logger, timer  # Ensure these are available for use.
+from .tools import get_logger, timer
 
 logger = get_logger(__name__)
 
