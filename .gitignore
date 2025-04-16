@@ -18,3 +18,14 @@ __pycache__/
 backend/temp.db
 
 web_scraper/
+
+.env
+venv/
+
+test.py
+
+logs/
+
+web_scraper_2/
+
+tests_results/
