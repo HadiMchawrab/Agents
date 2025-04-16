@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-WORKDIR /usr/src/app
+WORKDIR /backend
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -12,9 +12,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY . /backend/
 
-EXPOSE 5000
+EXPOSE 8000
 
-# Use gunicorn for production
-CMD ["python", "app.py"] 
+ENTRYPOINT ["python"]
+
+CMD ["app.py"] 

@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import json
-from backend.virtualgraph import test_graph
+from virtualgraph import test_graph
 
 app = Flask(__name__)
 CORS(app)
@@ -10,6 +10,11 @@ CORS(app)
 UPLOAD_FOLDER = 'csv_test'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+@app.route('/', methods=['GET'])
+def index():
+    return "Hello, World!"
+
 
 @app.route('/upload-and-process', methods=['POST'])
 def upload_and_process():
@@ -40,6 +45,11 @@ def upload_and_process():
             'status': 'error',
             'message': str(e)
         }), 500
-
 if __name__ == '__main__':
-    app.run(debug=True, port=5000) 
+    # app.run(debug=True, port=8001)
+    # Use the PORT environment variable or default to 8001
+    # port = int(os.environ.get('PORT', 8000))
+    app.run(debug=True, host='0.0.0.0', port=8000)
+
+# if __name__ == '__main__':
+#     app.run(debug=True, port=8001) 
