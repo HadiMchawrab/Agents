@@ -1,14 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { useNavigate } from 'react-router-dom';
 
-const CSVManager = () => {
+const CSVManager = ({ onProcessComplete }) => {
   const [files, setFiles] = useState([]);
   const [descriptions, setDescriptions] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   const onDrop = useCallback((acceptedFiles) => {
     const newFiles = acceptedFiles.filter(file => file.type === 'text/csv' || file.name.endsWith('.csv'));
     setFiles(prevFiles => [...prevFiles, ...newFiles]);
+    setError(null); // Clear any previous errors when new files are added
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -23,6 +27,7 @@ const CSVManager = () => {
     const newDescriptions = { ...descriptions };
     delete newDescriptions[fileName];
     setDescriptions(newDescriptions);
+    setError(null); // Clear error when files are removed
   };
 
   const updateDescription = (fileName, description) => {
@@ -34,37 +39,19 @@ const CSVManager = () => {
 
   const handleGenerate = async () => {
     setIsLoading(true);
+    setError(null);
+    
     try {
-      // Create a set of file paths with the correct directory
-      const fileSet = new Set(files.map(file => `csv_test/${file.name}`));
-      
-      // Prepare the initial state for the graph
-      const initialState = {
-        tables: "",
-        analyzed_topics: [],
-        csv_files: fileSet,
-        topic: [],
-        ScrapedArticles: new Set(),
-        AnalyzedArticles: new Set(),
-        ModelsPerTopic: new Set(),
-        Relationship: new Set(),
-        Explanation: new Set(),
-        ML_Models1: new Set()
-      };
-
-      // Create FormData to send both the files and the initial state
+      // Create FormData and add files
       const formData = new FormData();
-      
-      // Add each file to FormData
       files.forEach(file => {
         formData.append('files', file);
       });
-      
-      // Add the initial state as JSON
-      formData.append('initialState', JSON.stringify({
-        ...initialState,
-        csv_files: Array.from(initialState.csv_files) // Convert Set to Array for JSON
-      }));
+
+      // Add descriptions to the form data
+      Object.entries(descriptions).forEach(([fileName, description]) => {
+        formData.append(`descriptions[${fileName}]`, description);
+      });
 
       // Send the request to the backend
       const response = await fetch('http://localhost:5000/upload-and-process', {
@@ -72,16 +59,36 @@ const CSVManager = () => {
         body: formData
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        throw new Error(result.detail?.message || 'Failed to process files');
       }
 
-      const result = await response.json();
-      console.log('Processing result:', result);
-      alert('Graph generated successfully!');
+      // Transform the backend response into the format expected by ResultsPage
+      const transformedResult = {
+        topics: result.analyzed_topics.map(topicSet => {
+          // Find the corresponding topic data from the result
+          const topicData = result.topic.find(t => t.topic === Array.from(topicSet)[0]);
+          return {
+            topic: Array.from(topicSet)[0],
+            Relationship: new Set(topicData?.Relationship || []),
+            Explanation: new Set(topicData?.Explanation || []),
+            ML_Models1: new Set(topicData?.ML_Models1 || []),
+            ModelsPerTopic: new Set(topicData?.ModelsPerTopic || [])
+          };
+        })
+      };
+
+      // Call the onProcessComplete callback with the transformed result
+      onProcessComplete(transformedResult);
+      
+      // Navigate to the results page
+      navigate('/results');
     } catch (error) {
-      console.error('Error generating graph:', error);
-      alert('Error generating graph. Please try again.', error);
+      console.error('Error processing files:', error);
+      setError(error.message);
+      alert(`Error: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -89,6 +96,7 @@ const CSVManager = () => {
 
   return (
     <div className={`csv-manager ${isLoading ? 'loading' : ''}`}>
+      <h2>New Process</h2>
       <div 
         {...getRootProps()} 
         className={`dropzone ${isDragActive ? 'active' : ''}`}
@@ -100,6 +108,12 @@ const CSVManager = () => {
           <p>Drag and drop CSV files here, or click to select files</p>
         )}
       </div>
+
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
 
       <div className="files-list">
         {files.map((file) => (
@@ -123,7 +137,7 @@ const CSVManager = () => {
         onClick={handleGenerate}
         disabled={files.length === 0 || isLoading}
       >
-        {isLoading ? 'Generating...' : 'Generate'}
+        {isLoading ? 'Processing...' : 'Process Files'}
       </button>
     </div>
   );

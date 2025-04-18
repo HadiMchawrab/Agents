@@ -258,11 +258,13 @@ graph_builder.set_finish_point("relevance")
 # Compile the graph
 graph = graph_builder.compile()
 
-def test_graph():    
+def run_graph(csv_files: List[str]):   
+    csv_files = set(csv_files)
+    
     initial_state = {
         "tables": "",
         "analyzed_topics": [],
-        "csv_files": {}, #'csv_test/banking.csv','csv_test/data.csv'
+        "csv_files": csv_files,
         "topic": [],
         "ScrapedArticles": {},
         "AnalyzedArticles": {},
@@ -290,7 +292,9 @@ def test_graph():
     print("\n Explanations:")
     print(final_state["Explanation"])
     
+    return final_state
+    
     
 
 if __name__ == "__main__":
-    test_graph()
+    run_graph(["csv_files/banking.csv, csv_files/data.csv"])

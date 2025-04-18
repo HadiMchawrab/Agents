@@ -35,7 +35,7 @@ def search(query: str, driver: webdriver, url: str = "https://www.google.com"):
 
     except Exception as e:
         logger.exception(f"Error occurred while searching for '{query}': {e}")
-        return [], []
+        raise e
 
 def get_top_results(search_results: List, search_links: List, driver: webdriver, lang: str = "en", limit: int = 3):
     from time import sleep
@@ -60,7 +60,7 @@ def get_top_results(search_results: List, search_links: List, driver: webdriver,
 
             except Exception as e:
                 logger.warning(f"Skipping {website.url} due to error: {e}")
-
+                
             index += 1
             sleep(0.5)
 

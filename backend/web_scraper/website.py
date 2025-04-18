@@ -27,6 +27,7 @@ class Website:
                     return False
             except Exception as e:
                 logger.error(f"Could not detect lang from HTML tag: {e}")
+                raise e
             
             return True
 

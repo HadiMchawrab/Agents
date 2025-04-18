@@ -9,17 +9,21 @@ def get_logger(name: str = "web_scraper", log_file: str = "logs/web_scraper.log"
     if not logger.hasHandlers():
         logger.setLevel(logging.DEBUG)
 
+        # Create a more readable console format
         stream_handler = logging.StreamHandler()
         stream_formatter = logging.Formatter(
-            '[%(asctime)s] [%(levelname)s] %(name)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            '[%(asctime)s] [%(levelname)-8s] %(name)-12s: %(message)s',
+            datefmt='%H:%M:%S'
         )
         stream_handler.setFormatter(stream_formatter)
 
+        # Ensure logs directory exists
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        
+        # File handler with rotation
         file_handler = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=3)
         file_formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+            '%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         file_handler.setFormatter(file_formatter)
@@ -35,4 +39,6 @@ def timer(name="Block"):
     start = time.time()
     yield
     end = time.time()
-    print(f"[TIMER] {name} took {end - start:.2f}s")
+    duration = end - start
+    logger = get_logger("timer")
+    logger.info(f"{name} took {duration:.2f}s")
