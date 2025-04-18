@@ -4,6 +4,7 @@ import { useDropzone } from 'react-dropzone';
 const CSVManager = () => {
   const [files, setFiles] = useState([]);
   const [descriptions, setDescriptions] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles) => {
     const newFiles = acceptedFiles.filter(file => file.type === 'text/csv' || file.name.endsWith('.csv'));
@@ -31,23 +32,26 @@ const CSVManager = () => {
     }));
   };
 
-  const handleUpload = async () => {
-    // Create a set of file paths
-    const fileSet = new Set(files.map(file => file.name));
-    
-    // Prepare the initial state for the graph
-    const initialState = {
-      tables: "",
-      analyzed_topics: "",
-      csv_files: fileSet,
-      topic: [],
-      ScrapedArticles: new Set(),
-      AnalyzedArticles: new Set(),
-      ModelsPerTopic: new Set(),
-      Relevance: new Set()
-    };
-
+  const handleGenerate = async () => {
+    setIsLoading(true);
     try {
+      // Create a set of file paths with the correct directory
+      const fileSet = new Set(files.map(file => `csv_test/${file.name}`));
+      
+      // Prepare the initial state for the graph
+      const initialState = {
+        tables: "",
+        analyzed_topics: [],
+        csv_files: fileSet,
+        topic: [],
+        ScrapedArticles: new Set(),
+        AnalyzedArticles: new Set(),
+        ModelsPerTopic: new Set(),
+        Relationship: new Set(),
+        Explanation: new Set(),
+        ML_Models1: new Set()
+      };
+
       // Create FormData to send both the files and the initial state
       const formData = new FormData();
       
@@ -63,7 +67,7 @@ const CSVManager = () => {
       }));
 
       // Send the request to the backend
-      const response = await fetch('http://localhost:8000/upload-and-process', {
+      const response = await fetch('http://localhost:5000/upload-and-process', {
         method: 'POST',
         body: formData
       });
@@ -74,15 +78,17 @@ const CSVManager = () => {
 
       const result = await response.json();
       console.log('Processing result:', result);
-      alert('Files uploaded and processed successfully!');
+      alert('Graph generated successfully!');
     } catch (error) {
-      console.error('Error uploading files:', error);
-      alert('Error uploading files. Please try again.');
+      console.error('Error generating graph:', error);
+      alert('Error generating graph. Please try again.', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="csv-manager">
+    <div className={`csv-manager ${isLoading ? 'loading' : ''}`}>
       <div 
         {...getRootProps()} 
         className={`dropzone ${isDragActive ? 'active' : ''}`}
@@ -112,11 +118,13 @@ const CSVManager = () => {
         ))}
       </div>
 
-      {files.length > 0 && (
-        <button className="upload-button" onClick={handleUpload}>
-          Upload Files
-        </button>
-      )}
+      <button 
+        className="generate-button" 
+        onClick={handleGenerate}
+        disabled={files.length === 0 || isLoading}
+      >
+        {isLoading ? 'Generating...' : 'Generate'}
+      </button>
     </div>
   );
 };

@@ -22,4 +22,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 # Command to run the application
-CMD ["python", "graph.py"] 
+CMD ["python", "-u", "app.py"]
