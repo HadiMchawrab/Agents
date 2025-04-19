@@ -1,13 +1,13 @@
 .results-page {
   max-width: 1200px;
-  margin: 2rem auto;
-  padding: 2rem;
+  margin: 1rem auto;
+  padding: 1rem;
 }
 
 .results-page h2 {
   text-align: center;
   color: #333;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .topics-grid {

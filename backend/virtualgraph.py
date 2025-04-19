@@ -4,7 +4,7 @@ from PIL import Image
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
-from web_scraper.scraper import scrape, scrape_v2
+from web_scraper.scraper import scrape, scrape_v2, scrape_remote
 import sqlite3
 import pandas as pd
 import os
@@ -129,7 +129,7 @@ def scrape_node(state: State):
         ML_MOD = state["ML_Models1"]
         logging.info(f"ML_MOD: {ML_MOD}") 
         logging.info(f"Disected: {Disected}")
-        scr_into_str = "\n".join(scrape(topic))
+        scr_into_str = "\n".join(scrape_remote(topic))
         articles[topic] = scr_into_str
 
 

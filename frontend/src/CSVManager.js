@@ -64,21 +64,26 @@ const CSVManager = ({ onProcessComplete }) => {
       if (!response.ok) {
         throw new Error(result.detail?.message || 'Failed to process files');
       }
+      const backendData = result.result;
 
-      // Transform the backend response into the format expected by ResultsPage
+      if (!Array.isArray(backendData.analyzed_topics)) {
+      throw new Error("Invalid backend response: analyzed_topics is not an array.");
+      }
+
       const transformedResult = {
-        topics: result.analyzed_topics.map(topicSet => {
-          // Find the corresponding topic data from the result
-          const topicData = result.topic.find(t => t.topic === Array.from(topicSet)[0]);
-          return {
-            topic: Array.from(topicSet)[0],
-            Relationship: new Set(topicData?.Relationship || []),
-            Explanation: new Set(topicData?.Explanation || []),
-            ML_Models1: new Set(topicData?.ML_Models1 || []),
-            ModelsPerTopic: new Set(topicData?.ModelsPerTopic || [])
-          };
-        })
+      topics: backendData.analyzed_topics.map((topicObj, index) => {
+        const topic = topicObj.topic;
+
+        return {
+          topic,
+          Relationship: new Set(backendData.Relationship?.[topic] || []),
+          Explanation: new Set(backendData.Explanation?.[topic] || []),
+          ML_Models1: new Set((backendData.ML_Models1?.[index]?.split(",") || []).map(m => m.trim())),
+          ModelsPerTopic: new Set((backendData.ModelsPerTopic?.[topic]?.split(",") || []).map(m => m.trim()))
+        };
+      })
       };
+
 
       // Call the onProcessComplete callback with the transformed result
       onProcessComplete(transformedResult);
