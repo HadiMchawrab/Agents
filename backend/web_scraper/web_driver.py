@@ -58,3 +58,13 @@ def wait_for_page(driver: webdriver, wait_time: int = 7):
     except Exception as e:
         logger.warning(f"Timeout while waiting for Google Search page: {e}")
         raise e
+    
+def wait_for_element(driver: webdriver, element: str, wait_time: int = 7):
+    try:
+        WebDriverWait(driver, wait_time).until(
+            EC.presence_of_element_located((By.XPATH, element))
+        )
+        logger.info("Element loaded successfully")
+    except Exception as e:
+        logger.warning(f"Timeout while waiting for element: {e}")
+        raise e

@@ -4,7 +4,7 @@ from PIL import Image
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
-from web_scraper.scraper import scrape, scrape_v2
+from web_scraper.scraper import scrape_v2
 import sqlite3
 import pandas as pd
 import os
@@ -129,7 +129,7 @@ def scrape_node(state: State):
         ML_MOD = state["ML_Models1"]
         logging.info(f"ML_MOD: {ML_MOD}") 
         logging.info(f"Disected: {Disected}")
-        scr_into_str = "\n".join(scrape(topic))
+        scr_into_str = "\n".join(scrape_v2(topic))
         articles[topic] = scr_into_str
 
 
@@ -255,7 +255,7 @@ graph_builder.set_finish_point("relevance")
 # Compile the graph
 graph = graph_builder.compile()
 
-def run_graph(csv_files: List[str]):   
+def run_graph_v2(csv_files: List[str]):   
     csv_files = set(csv_files)
     
     initial_state = {
@@ -292,4 +292,4 @@ def run_graph(csv_files: List[str]):
     return final_state
 
 if __name__ == "__main__":
-    run_graph(["csv_files/banking.csv, csv_files/data.csv"])
+    run_graph_v2(["csv_files/banking.csv, csv_files/data.csv"])

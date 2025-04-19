@@ -66,3 +66,36 @@ def get_top_results(search_results: List, search_links: List, driver: webdriver,
 
     logger.info(f"Total extracted results: {len(top_results)}")
     return top_results
+
+
+def get_top_results_v2(search_results: List, search_links: List, driver: webdriver, lang: str = "en", limit: int = 3):
+    from time import sleep
+    top_results: List[Website] = []
+    index = 0
+
+    with timer("Top Results Extraction"):
+        while len(top_results) < limit and index < len(search_results):
+            title = search_results[index]
+            url = search_links[index]
+
+            website = Website(title=title, url=url)
+
+            try:
+                logger.info(f"Extracting content from result #{index + 1}: {url}")
+                website.extract_content_v2(driver)
+                if website.content:
+                    top_results.append(website)
+                    logger.debug(f"Content extracted for: {url}")
+                else:
+                    logger.debug(f"No content found for: {url}")
+
+            except Exception as e:
+                logger.warning(f"Skipping {website.url} due to error: {e}")
+                
+            index += 1
+            sleep(0.5)
+
+    logger.info(f"Total extracted results: {len(top_results)}")
+    return top_results
+
+
