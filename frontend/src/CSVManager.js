@@ -2,6 +2,23 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
 
+function parseTables(tablesText) {
+  const tables = [];
+  const columnsByTable = {};
+
+  const regex = /Table\s+(\w+):[\s\S]*?Has Columns:\s(.+?)(?=\n\n|$)/g;
+  let match;
+
+  while ((match = regex.exec(tablesText)) !== null) {
+    const tableName = match[1].trim();
+    const columns = match[2].split(',').map(c => c.trim());
+    tables.push(tableName);
+    columnsByTable[tableName] = columns;
+  }
+
+  return { tables, columnsByTable };
+}
+
 const CSVManager = ({ onProcessComplete }) => {
   const [files, setFiles] = useState([]);
   const [descriptions, setDescriptions] = useState({});
@@ -65,30 +82,31 @@ const CSVManager = ({ onProcessComplete }) => {
         throw new Error(result.detail?.message || 'Failed to process files');
       }
       const backendData = result.result;
+      const tablesText = backendData.tables;
+      const { tables, columnsByTable } = parseTables(tablesText);
 
       if (!Array.isArray(backendData.analyzed_topics)) {
       throw new Error("Invalid backend response: analyzed_topics is not an array.");
       }
 
       const transformedResult = {
-      topics: backendData.analyzed_topics.map((topicObj, index) => {
-        const topic = topicObj.topic;
-
-        return {
-          topic,
-          Relationship: new Set(backendData.Relationship?.[topic] || []),
-          Explanation: new Set(backendData.Explanation?.[topic] || []),
-          ML_Models1: new Set((backendData.ML_Models1?.[index]?.split(",") || []).map(m => m.trim())),
-          ModelsPerTopic: new Set((backendData.ModelsPerTopic?.[topic]?.split(",") || []).map(m => m.trim()))
-        };
-      })
+        topics: backendData.analyzed_topics.map((topicObj, index) => {
+          const topic = topicObj.topic;
+          return {
+            topic,
+            Relationship: new Set(backendData.Relationship?.[topic] || []),
+            Explanation: new Set(backendData.Explanation?.[topic] || []),
+            ML_Models1: new Set((backendData.ML_Models1?.[index]?.split(",") || []).map(m => m.trim())),
+            ModelsPerTopic: new Set((backendData.ModelsPerTopic?.[topic]?.split(",") || []).map(m => m.trim()))
+          };
+        }),
+        tables,
+        columnsByTable
       };
 
 
-      // Call the onProcessComplete callback with the transformed result
       onProcessComplete(transformedResult);
       
-      // Navigate to the results page
       navigate('/results');
     } catch (error) {
       console.error('Error processing files:', error);

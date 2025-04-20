@@ -6,20 +6,15 @@ import './TopicDetailsPage.css';
 const TopicDetailsPage = () => {
   const location = useLocation();
   const topic = location.state?.topic;
+  const tables = location.state?.tables;
+  const columnsByTable = location.state?.columnsByTable;
+  
+  console.log('TopicDetailsPage - columnsByTable:', columnsByTable);
+  console.log('TopicDetailsPage - tables:', tables);
   
   const [dropdownRows, setDropdownRows] = useState([
     { id: 1, selectedTable: '', selectedColumns: [] }
   ]);
-
-  // Mock data for tables - replace with actual data from your backend
-  const tables = ['Table1', 'Table2', 'Table3'];
-  
-  // Mock data for columns - replace with actual data from your backend
-  const columnsByTable = {
-    'Table1': ['Column1', 'Column2', 'Column3'],
-    'Table2': ['ColumnA', 'ColumnB', 'ColumnC'],
-    'Table3': ['ColumnX', 'ColumnY', 'ColumnZ']
-  };
 
   const handleAddRow = () => {
     const newRow = {
@@ -131,9 +126,11 @@ const TopicDetailsPage = () => {
                   }}
                   disabled={!row.selectedTable}
                 >
-                  {row.selectedTable && columnsByTable[row.selectedTable]?.map((column, index) => (
-                    <option key={index} value={column}>{column}</option>
-                  ))}
+                  {row.selectedTable && columnsByTable && columnsByTable[row.selectedTable] && 
+                    columnsByTable[row.selectedTable].map((column, index) => (
+                      <option key={index} value={column}>{column}</option>
+                    ))
+                  }
                 </select>
                 <p className="column-hint">Hold Ctrl (Windows) or ⌘ (Mac) to select multiple columns</p>
                 {row.selectedColumns.length > 0 && (

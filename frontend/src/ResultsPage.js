@@ -2,11 +2,13 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ResultsPage.css';
 
-const ResultsPage = ({ topics }) => {
+const ResultsPage = ({ topics, tables, columnsByTable }) => {
   const navigate = useNavigate();
 
   const handleTopicClick = (topic) => {
-    navigate('/topic-details', { state: { topic } });
+    console.log('ResultsPage - columnsByTable:', columnsByTable);
+    console.log('ResultsPage - tables:', tables);
+    navigate('/topic-details', { state: { topic, tables, columnsByTable } });
   };
 
   return (

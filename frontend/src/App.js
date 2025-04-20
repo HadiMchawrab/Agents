@@ -8,16 +8,19 @@ import './CSVManager.css';
 
 function App() {
   const [topics, setTopics] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [columnsByTable, setColumnsByTable] = useState({});
 
   const handleProcessComplete = (result) => {
-    // Assuming the backend returns topics in the format:
-    // [{ title: string, description: string }, ...]
     setTopics(result.topics || []);
+    setTables(result.tables || []);
+    setColumnsByTable(result.columnsByTable || {});
   };
 
-  const handleTopicSelect = (topic) => {
-    // Handle topic selection - we can implement this later
+  const handleTopicSelect = (topic, tables, columnsByTable) => {
     console.log('Selected topic:', topic);
+    console.log('Tables:', tables);
+    console.log('Columns by Table:', columnsByTable);
   };
 
   return (
@@ -37,9 +40,12 @@ function App() {
             <Route path="/" element={<CSVManager onProcessComplete={handleProcessComplete} />} />
             <Route 
               path="/results" 
-              element={<ResultsPage topics={topics} onTopicSelect={handleTopicSelect} />} 
+              element={<ResultsPage topics={topics} tables={tables} columnsByTable={columnsByTable} onTopicSelect={handleTopicSelect} />} 
             />
-            <Route path="/topic-details" element={<TopicDetailsPage />} />
+            <Route 
+              path="/topic-details" 
+              element={<TopicDetailsPage />} 
+            />
           </Routes>
         </main>
       </div>
