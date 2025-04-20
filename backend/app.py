@@ -6,7 +6,7 @@ from virtualgraph import test_graph
 
 app = Flask(__name__)
 CORS(app)
-
+    
 UPLOAD_FOLDER = 'csv_test'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)

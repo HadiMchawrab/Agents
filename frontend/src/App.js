@@ -1,18 +1,34 @@
 import React from 'react';
-import './App.css';
-import CSVManager from './CSVManager';
-import './CSVManager.css';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import CSVManager from './CSVManager.js';
+import DisplayTopics from './DisplayTopics.js';
+
+
+function Layout({ children }) {
+  return (
+    <div >
+      {children}
+    </div>
+  );
+}
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>CSV File Manager</h1>
-      </header>
-      <main>
-        <CSVManager />
-      </main>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={
+          <Layout>
+            <CSVManager/>
+          </Layout>
+        } />
+        <Route path="/topics" element={
+          <Layout>
+            <DisplayTopics/>
+          </Layout>
+        } />  
+        
+      </Routes>
+    </Router>
   );
 }
 

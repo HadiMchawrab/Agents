@@ -21,10 +21,13 @@ import logging
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+if not load_dotenv():
+    logging.warning("Failed to load .env file. Ensure it exists and is properly configured.")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+if not CLAUDE_API_KEY:
+    raise ValueError("CLAUDE_API_KEY is not set. Please check your .env file.")
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
 class State(TypedDict):
@@ -38,6 +41,7 @@ class State(TypedDict):
     Explanation: set
     ModelsPerTopic: set
     ML_Models1: set
+    Needs: set
     
 
 graph_builder = StateGraph(State)
@@ -201,6 +205,7 @@ def relevance_node(state: State):
 
     Relationships = {}
     Explanations = {}
+    Needs = {}
 
     for i, topic in enumerate(state["topic"]):
         Input_messages = [
@@ -214,6 +219,7 @@ def relevance_node(state: State):
                                     {
                                         "Relationship": "Choose the columns and tables from the initial tables and columns which are relevant to the ML models for the given topic(Make the columns you choose clear in the output)",
                                         "Explanation": "Explains the relationship between the columns names and how they are going to be used in the ML models given in the modelsWeUse"
+                                        "Needs": "Tell the user how the columns we need for this certain topic are going to be used in training the ML model and what data types are needed for the end goal of the ML model(classification, regression, etc)"
                                     }
                                     ```"""),
             HumanMessage(content=f"The initial tables and columns: {state['tables']}"),
@@ -243,9 +249,10 @@ def relevance_node(state: State):
 
         Relationships[topic] = [parsed_json.get("Relationship", "No Relationship returned")]
         Explanations[topic] = [parsed_json.get("Explanation", "No Explanation returned")]
+        Needs[topic] = [parsed_json.get("Needs", "No Needs returned")]
     
 
-    return {"Relationship": Relationships, "Explanation": Explanations}
+    return {"Relationship": Relationships, "Explanation": Explanations, "Needs": Needs}
 
 
 
@@ -279,7 +286,8 @@ def test_graph():
         "ModelsPerTopic": {},
         "Relationship": {},
         "Explanation": {},
-        "ML_Models1": {}
+        "ML_Models1": {},
+        "Needs": {}
     }
     
     # Run the graph
@@ -299,6 +307,8 @@ def test_graph():
     print(final_state["Relationship"])
     print("\n Explanations:")
     print(final_state["Explanation"])
+    print("\n Needs:")
+    print(final_state["Needs"])
     
     
 

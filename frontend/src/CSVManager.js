@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-
+import './CSVManager.css'; 
 const CSVManager = () => {
   const [files, setFiles] = useState([]);
   const [descriptions, setDescriptions] = useState({});
@@ -63,7 +63,7 @@ const CSVManager = () => {
       }));
 
       // Send the request to the backend
-      const response = await fetch('http://localhost:8000/upload-and-process', {
+      const response = await fetch('http://localhost:5000/upload-and-process', {
         method: 'POST',
         body: formData
       });
