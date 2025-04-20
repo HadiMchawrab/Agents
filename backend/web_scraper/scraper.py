@@ -1,12 +1,12 @@
 from selenium import webdriver
 from .web_driver import setup_webdriver, close_browser, setup_webdriver_remote
-from .search import search, get_top_results, get_top_results_v2, search_remote
+from .search import search, get_top_results, get_top_results_v2, search_remote_duck
 from .output import save_results_to_json
 from .tools import get_logger, timer
 
 logger = get_logger("scraper")
 
-def scrape_remote(query: str, driver: webdriver = None, url: str = "https://duckduckgo.com/", save_path: str = None, limit: int = 3, headless: bool = False) -> list:
+def scrape_remote(query: str, driver: webdriver = None, url: str = "https://www.google.com", save_path: str = None, limit: int = 3, headless: bool = False) -> list:
     logger.info(f"Starting scrape for query: '{query}'")
     
     with timer("Full scrape operation"):
@@ -18,7 +18,7 @@ def scrape_remote(query: str, driver: webdriver = None, url: str = "https://duck
                     logger.error(f"Failed to setup remote webdriver: {e}", exc_info=True)
                     raise e
 
-            search_results, search_links = search_remote(query, driver, url)
+            search_results, search_links = search(query, driver, url)
             logger.info(f"Search returned {len(search_links)} links")
 
             top_results = get_top_results(search_results, search_links, driver, limit)

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import CSVManager from './CSVManager';
 import ResultsPage from './ResultsPage';
+import TopicDetailsPage from './TopicDetailsPage';
 import './CSVManager.css';
 
 function App() {
@@ -27,9 +28,7 @@ function App() {
             <div className="logo">AI Consultant</div>
             <div className="nav-links">
               <Link to="/" className="nav-link">New Process</Link>
-              <Link to="/dashboard" className="nav-link">Dashboard</Link>
               <Link to="/help" className="nav-link">Help</Link>
-              <Link to="/settings" className="nav-link">Settings</Link>
             </div>
           </div>
         </nav>
@@ -40,6 +39,7 @@ function App() {
               path="/results" 
               element={<ResultsPage topics={topics} onTopicSelect={handleTopicSelect} />} 
             />
+            <Route path="/topic-details" element={<TopicDetailsPage />} />
           </Routes>
         </main>
       </div>

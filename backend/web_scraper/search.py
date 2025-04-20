@@ -10,7 +10,8 @@ import os
 
 logger = get_logger("search")
 
-def search_remote(query: str, driver: webdriver, url: str = "https://duckduckgo.com/"):
+
+def search_remote_duck(query: str, driver: webdriver, url: str = "https://duckduckgo.com/"):
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
     import time

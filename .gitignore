@@ -29,3 +29,7 @@ logs/
 web_scraper_2/
 
 tests_results/
+
+scraping_results/
+return.txt
+

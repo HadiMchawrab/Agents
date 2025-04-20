@@ -1,7 +1,14 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import './ResultsPage.css';
 
-const ResultsPage = ({ topics, onTopicSelect }) => {
+const ResultsPage = ({ topics }) => {
+  const navigate = useNavigate();
+
+  const handleTopicClick = (topic) => {
+    navigate('/topic-details', { state: { topic } });
+  };
+
   return (
     <div className="results-page">
       <h2>Select a Topic</h2>
@@ -10,7 +17,7 @@ const ResultsPage = ({ topics, onTopicSelect }) => {
           <div 
             key={index} 
             className="topic-box"
-            onClick={() => onTopicSelect(topic)}
+            onClick={() => handleTopicClick(topic)}
           >
             <h3>{topic.topic}</h3>
             
