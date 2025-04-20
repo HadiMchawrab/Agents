@@ -4,6 +4,7 @@ import './App.css';
 import CSVManager from './CSVManager';
 import ResultsPage from './ResultsPage';
 import TopicDetailsPage from './TopicDetailsPage';
+import HelpPage from './HelpPage';
 import './CSVManager.css';
 
 function App() {
@@ -45,6 +46,10 @@ function App() {
             <Route 
               path="/topic-details" 
               element={<TopicDetailsPage />} 
+            />
+            <Route 
+              path="/help" 
+              element={<HelpPage />} 
             />
           </Routes>
         </main>
