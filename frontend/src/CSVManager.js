@@ -86,7 +86,7 @@ const CSVManager = ({ onProcessComplete }) => {
       const { tables, columnsByTable } = parseTables(tablesText);
 
       if (!Array.isArray(backendData.analyzed_topics)) {
-      throw new Error("Invalid backend response: analyzed_topics is not an array.");
+        throw new Error("Invalid backend response: analyzed_topics is not an array.");
       }
 
       const transformedResult = {
@@ -101,9 +101,14 @@ const CSVManager = ({ onProcessComplete }) => {
           };
         }),
         tables,
-        columnsByTable
+        columnsByTable,
+        analyzedArticles: backendData.AnalyzedArticles || {},
+        scrapedArticles: backendData.ScrapedArticles || {},
+        relationships: backendData.Relationship || {},
+        explanations: backendData.Explanation || {},
+        modelsPerTopic: backendData.ModelsPerTopic || {},
+        mlModels: backendData.ML_Models1 || []
       };
-
 
       onProcessComplete(transformedResult);
       

@@ -5,7 +5,6 @@ import json
 import traceback
 import logging
 from virtualgraph import run_graph
-from virtualgraph_v2 import run_graph_v2
 from typing import List
 from api.routes import router
 

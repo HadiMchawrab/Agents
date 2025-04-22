@@ -79,6 +79,17 @@ class Website:
                         logger.warning(f"Stale or inaccessible element skipped: {e}")
                         continue
                 self.content = content
+                if any(bad_phrase in self.content.lower() for bad_phrase in [
+                    "there was a problem providing the content",
+                    "access denied",
+                    "please contact our support team",
+                    "cookies are used by this site",
+                    "copyright © 2024 elsevier",
+                    "you do not have access to",
+                    "verifying you are human"
+                ]):
+                    logger.warning(f"Blocked/irrelevant content detected in {self.url} — skipping.")
+                    self.content = None
                 if not self.content:
                     logger.warning(f"No content found for {self.url}. Saving page source.")
                     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

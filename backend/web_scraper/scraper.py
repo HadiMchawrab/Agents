@@ -6,7 +6,7 @@ from .tools import get_logger, timer
 
 logger = get_logger("scraper")
 
-def scrape_remote(query: str, driver: webdriver = None, url: str = "https://www.google.com", save_path: str = None, limit: int = 3, headless: bool = False) -> list:
+def scrape_remote(query: str, driver: webdriver = None, url: str = "https://www.duckduckgo.com", save_path: str = None, limit: int = 3, headless: bool = False) -> list:
     logger.info(f"Starting scrape for query: '{query}'")
     
     with timer("Full scrape operation"):
@@ -18,7 +18,7 @@ def scrape_remote(query: str, driver: webdriver = None, url: str = "https://www.
                     logger.error(f"Failed to setup remote webdriver: {e}", exc_info=True)
                     raise e
 
-            search_results, search_links = search(query, driver, url)
+            search_results, search_links = search_remote_duck(query, driver, url)
             logger.info(f"Search returned {len(search_links)} links")
 
             top_results = get_top_results(search_results, search_links, driver, limit)

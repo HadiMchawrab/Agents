@@ -1,16 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './TopicDetailsPage.css';
-
 
 const TopicDetailsPage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  
+  console.log('TopicDetailsPage - Full location state:', location.state);
+  
   const topic = location.state?.topic;
   const tables = location.state?.tables;
   const columnsByTable = location.state?.columnsByTable;
+  const analyzedArticles = location.state?.analyzedArticles;
+  const scrapedArticles = location.state?.scrapedArticles;
+  const relationships = location.state?.relationships;
+  const explanations = location.state?.explanations;
+  const modelsPerTopic = location.state?.modelsPerTopic;
+  const mlModels = location.state?.mlModels;
+  const allTopics = location.state?.allTopics;
   
-  console.log('TopicDetailsPage - columnsByTable:', columnsByTable);
+  console.log('TopicDetailsPage - topic:', topic);
   console.log('TopicDetailsPage - tables:', tables);
+  console.log('TopicDetailsPage - columnsByTable:', columnsByTable);
+  console.log('TopicDetailsPage - analyzedArticles:', analyzedArticles);
+  console.log('TopicDetailsPage - scrapedArticles:', scrapedArticles);
+  console.log('TopicDetailsPage - relationships:', relationships);
+  console.log('TopicDetailsPage - explanations:', explanations);
+  console.log('TopicDetailsPage - modelsPerTopic:', modelsPerTopic);
+  console.log('TopicDetailsPage - mlModels:', mlModels);
+  console.log('TopicDetailsPage - allTopics:', allTopics);
   
   const [dropdownRows, setDropdownRows] = useState([
     { id: 1, selectedTable: '', selectedColumns: [] }
@@ -54,6 +72,78 @@ const TopicDetailsPage = () => {
     return tables.filter(table => !selectedTables.includes(table));
   };
 
+  const handleContinue = async () => {
+    console.log('Location state:', location.state);
+    console.log('All topics:', allTopics);
+    
+    if (!allTopics) {
+      console.error('allTopics is undefined');
+      return;
+    }
+
+    // Prepare the data for submission
+    const selectedData = dropdownRows.map(row => ({
+      table: row.selectedTable,
+      columns: row.selectedColumns
+    }));
+
+    // Create the complete submission data
+    const submissionData = {
+      // All topics data (as received from results page)
+      topics: allTopics.map(topic => ({
+        topic: topic.topic,
+        relationships: Array.from(topic.Relationship || []),
+        explanations: Array.from(topic.Explanation || []),
+        ml_models: Array.from(topic.ML_Models1 || []),
+        models_per_topic: Array.from(topic.ModelsPerTopic || [])
+      })),
+      
+      // Original tables and columns data
+      tables: tables,
+      columns_by_table: columnsByTable,
+      
+      // Additional data from backend
+      analyzed_articles: analyzedArticles,
+      scraped_articles: scrapedArticles,
+      relationships: relationships,
+      explanations: explanations,
+      models_per_topic: modelsPerTopic,
+      ml_models: mlModels,
+      
+      // User selections
+      selected_topic: topic.topic,
+      selected_tables_and_columns: selectedData
+    };
+
+    try {
+      const response = await fetch('http://localhost:5000/submit-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit data');
+      }
+
+      const result = await response.json();
+      
+      // Navigate to analysis page with both the original and new data
+      navigate('/analysis', { 
+        state: { 
+          topic,
+          selectedData,
+          analysisResult: result // If the backend returns any analysis results
+        }
+      });
+    } catch (error) {
+      console.error('Error submitting data:', error);
+      // TODO: Add error handling UI
+    }
+  };
+
   if (!topic) {
     return <div className="topic-details-page">No topic selected</div>;
   }
@@ -78,7 +168,7 @@ const TopicDetailsPage = () => {
         </div>
       </div>
 
-      <h3 className="selection-title">Choose the tables and columns to work on</h3>
+      <h3 className="selection-title">Choose the tables you want to add to the model analysis</h3>
       <div className="selection-container">
         {dropdownRows.map((row, index) => (
           <div key={row.id} className="selection-row">
@@ -115,7 +205,7 @@ const TopicDetailsPage = () => {
               </div>
 
               <div className="dropdown-group">
-                <label htmlFor={`column-select-${row.id}`}>Select Columns:</label>
+                <label htmlFor={`column-select-${row.id}`}>Select Columns (Optional):</label>
                 <select 
                   id={`column-select-${row.id}`}
                   multiple 
@@ -142,6 +232,15 @@ const TopicDetailsPage = () => {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="continue-section">
+        <button 
+          className="continue-button"
+          onClick={handleContinue}
+        >
+          Continue to Analysis
+        </button>
       </div>
     </div>
   );

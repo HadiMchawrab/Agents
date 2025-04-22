@@ -2,13 +2,34 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ResultsPage.css';
 
-const ResultsPage = ({ topics, tables, columnsByTable }) => {
+const ResultsPage = ({ topics, tables, columnsByTable, analyzedArticles, scrapedArticles, relationships, explanations, modelsPerTopic, mlModels }) => {
   const navigate = useNavigate();
 
   const handleTopicClick = (topic) => {
     console.log('ResultsPage - columnsByTable:', columnsByTable);
     console.log('ResultsPage - tables:', tables);
-    navigate('/topic-details', { state: { topic, tables, columnsByTable } });
+    console.log('ResultsPage - topics:', topics);
+    console.log('ResultsPage - analyzedArticles:', analyzedArticles);
+    console.log('ResultsPage - scrapedArticles:', scrapedArticles);
+    console.log('ResultsPage - relationships:', relationships);
+    console.log('ResultsPage - explanations:', explanations);
+    console.log('ResultsPage - modelsPerTopic:', modelsPerTopic);
+    console.log('ResultsPage - mlModels:', mlModels);
+    
+    navigate('/topic-details', { 
+      state: { 
+        topic, 
+        tables, 
+        columnsByTable,
+        analyzedArticles,
+        scrapedArticles,
+        relationships,
+        explanations,
+        modelsPerTopic,
+        mlModels,
+        allTopics: topics
+      } 
+    });
   };
 
   return (
@@ -24,7 +45,7 @@ const ResultsPage = ({ topics, tables, columnsByTable }) => {
             <h3>{topic.topic}</h3>
             
             <div className="topic-section">
-              <h4>Relationships</h4>
+              <h4>Relationship</h4>
               <ul className="topic-list">
                 {topic.Relationship && Array.from(topic.Relationship).map((rel, i) => (
                   <li key={i}>{rel}</li>
@@ -33,7 +54,7 @@ const ResultsPage = ({ topics, tables, columnsByTable }) => {
             </div>
 
             <div className="topic-section">
-              <h4>Explanations</h4>
+              <h4>Explanation</h4>
               <ul className="topic-list">
                 {topic.Explanation && Array.from(topic.Explanation).map((exp, i) => (
                   <li key={i}>{exp}</li>
@@ -42,7 +63,7 @@ const ResultsPage = ({ topics, tables, columnsByTable }) => {
             </div>
 
             <div className="topic-section">
-              <h4>ML Models</h4>
+              <h4>Initial Models</h4>
               <ul className="topic-list">
                 {topic.ML_Models1 && Array.from(topic.ML_Models1).map((model, i) => (
                   <li key={i}>{model}</li>
@@ -51,7 +72,7 @@ const ResultsPage = ({ topics, tables, columnsByTable }) => {
             </div>
 
             <div className="topic-section">
-              <h4>Models Per Topic</h4>
+              <h4>Models from Articles</h4>
               <ul className="topic-list">
                 {topic.ModelsPerTopic && Array.from(topic.ModelsPerTopic).map((model, i) => (
                   <li key={i}>{model}</li>
