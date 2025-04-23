@@ -32,23 +32,22 @@ if not CLAUDE_API_KEY:
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
 class State(TypedDict):
-    tables: str 
+    tables: set 
     analyzed_topics: list[set]
     csv_files: set
     topic: List[str]
     ScrapedArticles: set
     AnalyzedArticles: set[dict[str, dict[str, str]]]
     Relationship: set
-    Explanation: set
     ModelsPerTopic: set
     ML_Models1: set
     Needs: set
-    
+    GPT_Columns: set
 
 graph_builder = StateGraph(State)
 
 
-def get_table_columns(state: dict, db_name: str = 'temp.db') -> List[Dict[str, List[str]]]:
+def get_table_columns(state: dict, db_name: str = 'temp.db') -> dict:
     conn = sqlite3.connect(db_name)
     results = []
     try:
@@ -61,11 +60,13 @@ def get_table_columns(state: dict, db_name: str = 'temp.db') -> List[Dict[str, L
             columns = pd.read_sql_query(f"PRAGMA table_info({table_name})", conn)['name'].tolist()
             results.append({table_name: columns})
     except Exception as e:
+        logging.error(f"Error processing CSV files: {str(e)}")
         raise e
     finally:
         conn.close()
-    return results
-
+    
+    # Return a dictionary with 'tables' as the key
+    return {"tables": results}
 
 
 
@@ -79,7 +80,9 @@ def analyze_tables_node(state: State):
 
     # Retrieve the API key from the environment
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-
+    # stringify the tables
+    tables = state["tables"]
+    tables_str = "\n".join([f"{table_name}: {columns}" for table in tables for table_name, columns in table.items()])
     model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY)
     input_messages= [SystemMessage(content = """Given tables and columns names, extract the topic of the database. 
                                                 Provide 4 possible topics where  machine learning models would be implemented on tabular database similar to the one above to improve the performance of such a company.
@@ -104,7 +107,9 @@ def analyze_tables_node(state: State):
                                         }
                                                 ```
                                    """),
-                    HumanMessage(content = state["tables"])]
+                    HumanMessage(content = f"""Tables and columns names:
+                                        {tables_str}
+                                        """)]
     
     ai_message = model.invoke(input_messages)
     if not ai_message.content.startswith("```json"):
@@ -122,10 +127,6 @@ def analyze_tables_node(state: State):
     
     logging.info(f"ML Models: {ML_Models1}")
     return {"analyzed_topics": ans, "topic": topics, "ML_Models1": ML_Models1}
-
-
-
-
 
 
 
@@ -200,9 +201,11 @@ def relevance_node(state: State):
         temperature=0,
         anthropic_api_key=CLAUDE_API_KEY
     )
+    tables = state["tables"]
+    tables_str = "\n".join([f"{table_name}: {columns}" for table in tables for table_name, columns in table.items()])
 
     Relationships = {}
-    Explanations = {}
+    GPT_Columns = {}
     Needs = {}
 
     for i, topic in enumerate(state["topic"]):
@@ -210,25 +213,26 @@ def relevance_node(state: State):
             SystemMessage(content="""You are given the ML models used in the topics and how they would benefit the company, 
                                      You are also given the initial tables and column names of my database,
                                      You are given the interpretation of the tables and column names.
-                                     Find the relevance of each of the ML models posed with the tables and columns names of the database.
+                                     Give me back the table and column names as they are from the initial tables and columns names of the database without changing upper case, hyphens or anything that has to do with the names of the columns since I need them later to reconstruct the data frames again .
+                                        Give me back the relationship between the ML model and the tables and columns names of the database.
                                   """),
             HumanMessage(content="""Return the response **only** in this strict JSON format, with no additional text or explanations:
                                     ```json
                                     {
-                                        "Relationship": "Choose the columns and tables from the initial tables and columns which are relevant to the ML models for the given topic(Make the columns you choose clear in the output)",
-                                        "Explanation": "Explains the relationship between the columns names and how they are going to be used in the ML models given in the modelsWeUse"
+                                        "Relationship": "Explains the relationship between the ML model and the tables and columns names of the database",
+                                        "Columns": "[{table1:[col1,col2]}, {table2:[col1,col]}](Make sure you dont change anything in the syntax(Upper Case, hyphens, underscores)Return a list which contains dictionaries with the table name and the 7 columns maximum which GPT chooses as the key to the table name),
                                         "Needs": "Tell the user how the columns we need for this certain topic are going to be used in training the ML model and what data types are needed for the end goal of the ML model(classification, regression, etc)"
                                     }
                                     ```"""),
-            HumanMessage(content=f"The initial tables and columns: {state['tables']}"),
+            HumanMessage(content=f"The initial tables and columns: {tables_str}"),
             HumanMessage(content=json.dumps(state["analyzed_topics"][i])), 
             HumanMessage(content=f"modelsWeUse: {state['ModelsPerTopic'][topic]}")]  
 
         ai_response = model.invoke(Input_messages)
+        logging.info(f"Claude response: {ai_response.content}")
         raw_content = ai_response.content.strip()
         logging.info(f"Claude raw response: {raw_content}")
 
-        # Extract JSON from fenced block
         json_text = None
         if raw_content.startswith("```json"):
             start_index = raw_content.find("```json") + len("```json")
@@ -246,24 +250,30 @@ def relevance_node(state: State):
             raise ValueError("Claude's response was not valid JSON.") from e
 
         Relationships[topic] = [parsed_json.get("Relationship", "No Relationship returned")]
-        Explanations[topic] = [parsed_json.get("Explanation", "No Explanation returned")]
+        GPT_Columns[topic] = [parsed_json.get("Columns", "No Columns returned")]
         Needs[topic] = [parsed_json.get("Needs", "No Needs returned")]
-    
-
-    return {"Relationship": Relationships, "Explanation": Explanations, "Needs": Needs}
 
 
+    return {"Relationship": Relationships, "GPT_Columns": GPT_Columns, "Needs": Needs}
 
-# Add nodes to the graph
+
+
+
+
+
+
+
 graph_builder.add_node("extract_tables", get_table_columns)
 graph_builder.add_node("analyze_tables", analyze_tables_node)
 graph_builder.add_node("scrape_articles", scrape_node)
 graph_builder.add_node("relevance", relevance_node)
 
+
 # Add edges
 graph_builder.add_edge("extract_tables", "analyze_tables")
 graph_builder.add_edge("analyze_tables", "scrape_articles")
 graph_builder.add_edge("scrape_articles", "relevance")
+
 
 # Set entry and finish points
 graph_builder.set_entry_point("extract_tables")
@@ -275,7 +285,7 @@ graph = graph_builder.compile()
 
 def test_graph():    
     initial_state = {
-        "tables": "",
+        "tables": {},
         "analyzed_topics": [],
         "csv_files": {'csv_test/banking.csv','csv_test/data.csv'},
         "topic": [],
@@ -283,7 +293,7 @@ def test_graph():
         "AnalyzedArticles": {},
         "ModelsPerTopic": {},
         "Relationship": {},
-        "Explanation": {},
+        "GPT_Columns": {},
         "ML_Models1": {},
         "Needs": {}
     }
@@ -303,8 +313,8 @@ def test_graph():
     print(final_state["ModelsPerTopic"])
     print("\n Relationships:")
     print(final_state["Relationship"])
-    print("\n Explanations:")
-    print(final_state["Explanation"])
+    print("\n GPT_Columns:")
+    print(final_state["GPT_Columns"])
     print("\n Needs:")
     print(final_state["Needs"])
     
