@@ -12,6 +12,9 @@ import json
 import io
 import logging
 from dotenv import load_dotenv
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from anthropic import OverloadedError
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -59,55 +62,87 @@ def get_table_columns(state: State, db_name: str = 'temp.db') -> str:
 
 
 
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
+    retry=retry_if_exception_type(OverloadedError)
+)
 def analyze_tables_node(state: State):
     # Load environment variables from .env file
     load_dotenv()
 
     # Retrieve the API key from the environment
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+    if not CLAUDE_API_KEY:
+        raise ValueError("CLAUDE_API_KEY environment variable is not set")
 
-    model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY)
-    input_messages= [SystemMessage(content = """Given tables and columns names, extract the topic of the database. 
-                                                Provide 4 possible topics where  machine learning models would be implemented on tabular database similar to the one above to improve the performance of such a company.
-                                                Hence the 4 topics you are returning are the fields we want to dive into in our web scraper, hence they should be clear and have the key words in place
-                                                Return them in a JSON array of objects with topic names and reasoning"""), 
-                     HumanMessage(content = """Return the response **only** in this strict JSON format, with no additional text or explanations. DON'T GENERATE ANY TEXT OUTSIDE of the json format("Machine learning models employed in" does not change in all of the topics):
-                    
-                                        ```json
+    try:
+        model = ChatAnthropic(
+            model_name="claude-3-7-sonnet-20250219",
+            temperature=0,
+            anthropic_api_key=CLAUDE_API_KEY,
+            max_retries=3
+        )
+        
+        input_messages = [
+            SystemMessage(content="""Given tables and columns names, extract the topic of the database. 
+                                    Provide 4 possible topics where machine learning models would be implemented on tabular database similar to the one above to improve the performance of such a company.
+                                    Hence the 4 topics you are returning are the fields we want to dive into in our web scraper, hence they should be clear and have the key words in place
+                                    Return them in a JSON array of objects with topic names and reasoning"""), 
+            HumanMessage(content="""Return the response **only** in this strict JSON format, with no additional text or explanations. DON'T GENERATE ANY TEXT OUTSIDE of the json format("Machine learning models employed in" does not change in all of the topics):
+            
+                                ```json
+                                {
+                                    "answer": [
                                         {
-                                            "answer": [
-                                                {
-                                                    "topic": "'Topic 1' and why it is important to the company and how it optimizes the performance of the company",
-                                                    "ML_Models": "ML Models 1 inferred by Claude from the articles",
-                                                    "reasoning": "Reasoning 1 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
-                                                },
-                                                {
-                                                    "topic": "Machine learning models employed in 'Topic 2'",
-                                                    "ML_Models": "ML Models 2 inferred by Claude from the articles"
-                                                    "reasoning": "Reasoning 2 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
-                                                }
-                                            ]
+                                            "topic": "'Topic 1' and why it is important to the company and how it optimizes the performance of the company",
+                                            "ML_Models": "ML Models 1 inferred by Claude from the articles",
+                                            "reasoning": "Reasoning 1 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
+                                        },
+                                        {
+                                            "topic": "Machine learning models employed in 'Topic 2'",
+                                            "ML_Models": "ML Models 2 inferred by Claude from the articles"
+                                            "reasoning": "Reasoning 2 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
                                         }
-                                                ```
-                                   """),
-                    HumanMessage(content = state["tables"])]
-    
-    ai_message = model.invoke(input_messages)
-    if not ai_message.content.startswith("```json"):
-        start_index = ai_message.content.find("```json") + len("```json")
-        end_index = ai_message.content.find("```", start_index)
-        ai_message = ai_message.content[start_index:end_index].strip()
-    else:
-        ai_message = ai_message.content[7:-3].strip()
-    json_response = json.loads(ai_message)  
-    ans = json_response['answer']
-    topics = [topic["topic"] for topic in ans]
-    logging.info(f"Topics: {topics}")
+                                    ]
+                                }
+                                ```
+                           """),
+            HumanMessage(content=state["tables"])
+        ]
+        
+        ai_message = model.invoke(input_messages)
+        content = ai_message.content
 
-    ML_Models1 = [topic["ML_Models"] for topic in ans]
-    
-    logging.info(f"ML Models: {ML_Models1}")
-    return {"analyzed_topics": ans, "topic": topics, "ML_Models1": ML_Models1}
+        # Extract JSON content
+        if "```json" in content:
+            start_index = content.find("```json") + len("```json")
+            end_index = content.find("```", start_index)
+            content = content[start_index:end_index].strip()
+        else:
+            content = content.strip()
+
+        try:
+            json_response = json.loads(content)
+            ans = json_response['answer']
+            topics = [topic["topic"] for topic in ans]
+            ML_Models1 = [topic["ML_Models"] for topic in ans]
+            
+            logging.info(f"Topics: {topics}")
+            logging.info(f"ML Models: {ML_Models1}")
+            
+            return {
+                "analyzed_topics": ans,
+                "topic": topics,
+                "ML_Models1": ML_Models1
+            }
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse JSON response: {content}")
+            raise ValueError("Invalid JSON response from Claude") from e
+
+    except Exception as e:
+        logging.error(f"Error in analyze_tables_node: {str(e)}")
+        raise
 
 
 
