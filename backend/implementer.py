@@ -41,6 +41,10 @@ class State(TypedDict):
     Analysis: set 
     Pictures: set 
     Pictures_Analysis: set
+    Reqs : set
+    scripts: set # set of dictionaries of data frames and the scripts to run on them
+    return_format: set
+
 
 
 graph_builder = StateGraph(State)
@@ -83,7 +87,16 @@ def into_data_frames(state: State) -> State:
 
 
 def generate_analysis(state: State) -> State:
-    for table_name in state['adjusted_columns'].items():
+    ans = {}
+    Reqs = {}
+    scripts = {}
+    return_format = {}
+    
+    # Extract table names from adjusted_columns dictionary
+    table_names = list(state['adjusted_columns'].keys())
+    logging.info(f"Tables for analysis: {table_names}")
+    
+    for table_name in table_names:
         # Generate analysis for each DataFrame using CLAUDE
         logging.info(f"Generating analysis for {table_name}")
         adjusted_columns_str = str(state['adjusted_columns'])
@@ -93,20 +106,17 @@ def generate_analysis(state: State) -> State:
                                                 You will be generating python scripts to run on the data frame to generate the analysis and get visualization.
                                                 You will also need to generate the requirements to run the scripts.
                                                 I will then be sending the data you generated with the Data frames in a jupyter notebook to run the scripts and generate the analysis and get visualization.
+                                                The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 50 lines of code max
                                                 As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
                                                 """), 
-                     HumanMessage(content = """DON'T GENERATE ANY TEXT OUTSIDE of the json format, DO NOT output "json", "Json", or any text before the opening brace '{'. Start the output *directly* with {.
-
-                                    
+                     HumanMessage(content = """"Return the response **only** in this strict JSON format, with no additional text or explanations:
+                                 ```json
                                     {
-                                        "answer": [
-                                            {
-                                        "Requirments": "All the requirements to be installed to run the below scripts",
-                                                "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns ",
-                                                "Return_Format": "The format of the return data, meaning how will you return "                                        }
-                                        ]
-                                    }  
-                                    """),
+                                        "Reqs": "All the requirements to be installed to run the below scripts",
+                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 50 lines of code max, which will be running in a single code cell)",
+                                        "Return_Format": "The format of the return data, meaning how will you return "                                                                   
+                                    }
+                                    ```"""),
                      HumanMessage(content = f"""The topic is: {state['topic']}"""),
                      HumanMessage(content = f"""The columns in this data frame are: {adjusted_columns_str}"""),
                      HumanMessage(content = f"""The ML models are: {ml_models_str}""")
@@ -117,27 +127,31 @@ def generate_analysis(state: State) -> State:
         logging.info(f"Message Sent to AI")
         ai_message = model.invoke(input_messages)
         logging.info(ai_message.content)
-        content = ai_message.content
+        raw_content = ai_message.content.strip()
+        logging.info(f"Claude raw response: {raw_content}")
 
-        # Strip triple backticks if they exist
-        if "```json" in content:
-            start_index = content.find("```json") + len("```json")
-            end_index = content.find("```", start_index)
-            content = content[start_index:end_index].strip()
-        elif "```" in content:
-            # just in case it starts directly with triple backticks
-            content = content.strip("```").strip()
-
+        json_text = None
+        if raw_content.startswith("```json"):
+            start_index = raw_content.find("```json") + len("```json")
+            end_index = raw_content.find("```", start_index)
+            json_text = raw_content[start_index:end_index].strip()
+        elif raw_content.startswith("```"):
+            json_text = raw_content.strip("```").strip()
+        else:
+            json_text = raw_content  # Try parsing whatever we get
         try:
-            json_response = json.loads(content)
+            parsed_json = json.loads(json_text)
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse JSON from AI message: {content}")
-            raise e
-
-        answer = json_response['answer']
-        print(answer)
+            logging.error(f"Failed to parse Claude response:\n{json_text}")
+            raise ValueError("Claude's response was not valid JSON.") from e
+            
+        # Store results using string table_name as dictionary key
+        Reqs[table_name] = parsed_json.get("Reqs", "No Reqs returned")
+        scripts[table_name] = parsed_json.get("Scripts", "No Scripts returned")
+        return_format[table_name] = parsed_json.get("Return_Format", "No Format returned")
         
-    return state
+        
+    return {'Analysis': ans, 'Reqs': Reqs, 'scripts': scripts, 'return_Format': return_format}
 
 
 
@@ -178,8 +192,13 @@ def test_graph2():
         'Relationship': "The ML models (SVM, RNN, Bayesian Networks) are well-suited for credit risk assessment using the available data. SVM can classify customers into risk categories based on financial attributes, RNNs can analyze sequential patterns in financial data to predict defaults, and Bayesian Networks can model probabilistic relationships between financial indicators and credit risk outcomes.",
         'ML_Models': ["Support Vector Machines (SVM)", "Recurrent Neural Networks (RNN)", "Bayesian Networks","Logistic Regression", "Random Forest", "Gradient Boosting", "Neural Networks"],
         'scripts': {}, # set of dictionaries of data frames and the scripts to run on them
-        'requirements': {}, 
-        'Analysis': {}
+        'return_format': {}, # set of dictionaries of data frames and the return format to run on them 
+        'Analysis': {},
+        'Pictures': {},
+        'Pictures_Analysis': {},
+        'Reqs': {},
+        'DF_Info': {}
+
     }
 
     # Run the graph with the sample state
