@@ -26,7 +26,7 @@ CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 if not CLAUDE_API_KEY:
     raise ValueError("CLAUDE_API_KEY is not set. Please check your .env file.")
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY)
+model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY, max_tokens = 8192 )
 
 
 class State(TypedDict):
@@ -66,46 +66,79 @@ def into_data_frames(state: State) -> State:
                     if valid_columns:
                         df = pd.read_csv(csv_file, usecols=valid_columns)
                         data_frames[table_name] = df
+                        column_dtypes = []
+                        for col in valid_columns:
+                            dtype_str = str(df[col].dtype)
+                            column_dtypes.append(f"{col}:{dtype_str}")
+                        adjusted_columns[table_name] = column_dtypes
                     else:
                         logging.warning(f"None of the requested columns for {table_name} exist in the CSV.")
                 except Exception as e:
                     logging.error(f"Error reading {csv_file}: {str(e)}")
             else:
                 logging.warning(f"CSV file {csv_file} does not exist. Skipping this table.")
+    logging.info(f"Data frames created: {adjusted_columns}")
     return {'data_frames': data_frames, 'adjusted_columns': adjusted_columns}
 
 
 
-# def generate_analysis(state: State) -> State:
-#     # state['data_frames'] is a set of data frames created from the tables
-#     # hence for each data frame, we do the following:
-#     # get info using df.info() and assess it in terms of the data types we need for the ML models and the topic in general, using CLAUDE and save into state
-#     # generate using CLAUDE, some python scripts to run on the dataframe after the analysis has been done and saved in the state
-#     input_messages= [SystemMessage(content = """
-                                                
-#                                                 """), 
-#                      HumanMessage(content = """Return the response **only** in this strict JSON format, with no additional text or explanations. DON'T GENERATE ANY TEXT OUTSIDE of the json format("Machine learning models employed in" does not change in all of the topics):
-                    
-#                                         ```json
-#                                         {
-#                                             "answer": [
-#                                                 {}
-#                                             ]
-#                                         }
-#                                                 ```
-#                                    """),
+def generate_analysis(state: State) -> State:
+    for table_name in state['adjusted_columns'].items():
+        # Generate analysis for each DataFrame using CLAUDE
+        logging.info(f"Generating analysis for {table_name}")
+        adjusted_columns_str = str(state['adjusted_columns'])
+        ml_models_str = str(state['ML_Models'])
+        logging.info(f"Generating analysis for {table_name} with columns: {adjusted_columns_str} and ML models: {ml_models_str}")
+        input_messages= [SystemMessage(content = """
+                                                You will be generating python scripts to run on the data frame to generate the analysis and get visualization.
+                                                You will also need to generate the requirements to run the scripts.
+                                                I will then be sending the data you generated with the Data frames in a jupyter notebook to run the scripts and generate the analysis and get visualization.
+                                                As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
+                                                """), 
+                     HumanMessage(content = """DON'T GENERATE ANY TEXT OUTSIDE of the json format, DO NOT output "json", "Json", or any text before the opening brace '{'. Start the output *directly* with {.
 
-#                     HumanMessage(content = state["tables"])]
-    
-#     ai_message = model.invoke(input_messages)
-#     if not ai_message.content.startswith("```json"):
-#         start_index = ai_message.content.find("```json") + len("```json")
-#         end_index = ai_message.content.find("```", start_index)
-#         ai_message = ai_message.content[start_index:end_index].strip()
-#     else:
-#         ai_message = ai_message.content[7:-3].strip()
-#     json_response = json.loads(ai_message)  
-#     ans = json_response['answer']
+                                    
+                                    {
+                                        "answer": [
+                                            {
+                                        "Requirments": "All the requirements to be installed to run the below scripts",
+                                                "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns ",
+                                                "Return_Format": "The format of the return data, meaning how will you return "                                        }
+                                        ]
+                                    }  
+                                    """),
+                     HumanMessage(content = f"""The topic is: {state['topic']}"""),
+                     HumanMessage(content = f"""The columns in this data frame are: {adjusted_columns_str}"""),
+                     HumanMessage(content = f"""The ML models are: {ml_models_str}""")
+                     ]
+                                  
+
+        
+        logging.info(f"Message Sent to AI")
+        ai_message = model.invoke(input_messages)
+        logging.info(ai_message.content)
+        content = ai_message.content
+
+        # Strip triple backticks if they exist
+        if "```json" in content:
+            start_index = content.find("```json") + len("```json")
+            end_index = content.find("```", start_index)
+            content = content[start_index:end_index].strip()
+        elif "```" in content:
+            # just in case it starts directly with triple backticks
+            content = content.strip("```").strip()
+
+        try:
+            json_response = json.loads(content)
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse JSON from AI message: {content}")
+            raise e
+
+        answer = json_response['answer']
+        print(answer)
+        
+    return state
+
 
 
 # def generate_pictures(state: State) -> State:
@@ -126,9 +159,12 @@ def into_data_frames(state: State) -> State:
 
 
 graph_builder.add_node(into_data_frames, "into_data_frames")
+graph_builder.add_node(generate_analysis, "generate_analysis")
+
+graph_builder.add_edge("into_data_frames", "generate_analysis")
 
 graph_builder.set_entry_point("into_data_frames")
-graph_builder.set_finish_point("into_data_frames")
+graph_builder.set_finish_point("generate_analysis")
 
 graph2 = graph_builder.compile()
 def test_graph2():
@@ -141,7 +177,9 @@ def test_graph2():
         'topic': "Machine learning models employed in Credit Risk Assessment",
         'Relationship': "The ML models (SVM, RNN, Bayesian Networks) are well-suited for credit risk assessment using the available data. SVM can classify customers into risk categories based on financial attributes, RNNs can analyze sequential patterns in financial data to predict defaults, and Bayesian Networks can model probabilistic relationships between financial indicators and credit risk outcomes.",
         'ML_Models': ["Support Vector Machines (SVM)", "Recurrent Neural Networks (RNN)", "Bayesian Networks","Logistic Regression", "Random Forest", "Gradient Boosting", "Neural Networks"],
-        'scripts': {} # set of dictionaries of data franes and the scripts to run on them
+        'scripts': {}, # set of dictionaries of data frames and the scripts to run on them
+        'requirements': {}, 
+        'Analysis': {}
     }
 
     # Run the graph with the sample state
