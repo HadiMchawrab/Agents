@@ -125,10 +125,11 @@ def generate_analysis(state: State) -> State:
                                         Rules: 
                                         Inside your working directory which is notebook_output, 
                                         You need to create a subdirectory for this table name = {table_name} in the notebook_output directory, and save the pictures in it. 
-                                        Example of the path: notebook_output/{table_name}/{table_name}_figure_1.png
-                                                             notebook_output/{table_name}/{table_name}_figure_2.png
+                                        Example of the path: {table_name}/{table_name}_figure_1.png
+                                                             {table_name}/{table_name}_figure_2.png
                                         And so on. "
-                                    {'}'}
+                                    {'}'}```
+                                    YOU NEED TO RETURN THE JSON RESPONSE ONLY, STARTING with ```json and ending with ```, so I can parse it easily
                                     """),
                      HumanMessage(content = f"""The topic is: {state['topic']}"""),
                      HumanMessage(content = f"""The columns in this data frame are: {adjusted_columns_str}"""),
@@ -153,7 +154,7 @@ def generate_analysis(state: State) -> State:
         else:
             json_text = raw_content  # Try parsing whatever we get
         try:
-            parsed_json = json.loads(json_text)
+            parsed_json = json.loads(json_text[7:-3])
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse Claude response:\n{json_text}")
             raise ValueError("Claude's response was not valid JSON.") from e
@@ -321,8 +322,9 @@ def test_graph2():
     }
 
     # Run the graph with the sample state
+    print("Initial State:")
     final_state2 = graph2.invoke(initial_state)
-    
+    print(final_state2)
     
 def run_graph2(data: dict) -> State:
     # Transform tables from {table: columns} to [{table: columns}]
@@ -375,5 +377,5 @@ def run_graph2(data: dict) -> State:
     # }
 
 
-if __name__ == "_main_":
+if __name__ == "__main__":
     test_graph2()
