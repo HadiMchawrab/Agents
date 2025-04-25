@@ -203,13 +203,21 @@ const TopicDetailsPage = () => {
         <div className="topic-info-section">
           <span className="topic-label">GPT Selected Columns:</span>
           <span className="topic-content">
-            {topic.GPT_Columns && Object.entries(topic.GPT_Columns).map(([table, columns]) => (
-              <div key={table} className="gpt-columns-info">
-                <strong>{table}:</strong> {columns.join(', ')}
-              </div>
-            ))}
+            {topic.GPT_Columns &&
+              topic.GPT_Columns.flat().map((tableObj, index) => {
+                const [tableName, columns] = Object.entries(tableObj)[0];
+                return (
+                  <div key={index}>
+                    <em>{tableName}:</em> {columns.join(", ")}
+                  </div>
+                );
+              })}
           </span>
         </div>
+
+
+
+
         </div>
 
       <h3 className="selection-title">Choose Additional Tables and Columns for Analysis</h3>

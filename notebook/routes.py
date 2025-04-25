@@ -11,6 +11,7 @@ import logging
 from contextlib import contextmanager
 import os
 import textwrap
+import base64
 
 
 # Configure logging
@@ -55,6 +56,8 @@ async def data_analysis(
     notebook_filename = 'temp_notebook.ipynb'
     executed_notebook_filename = 'executed_notebook.ipynb'
     output_dir = 'notebook_output'
+    
+    results = {}
     
     try:
         # Create output directory for figures
@@ -229,47 +232,62 @@ os.makedirs('notebook_output', exist_ok=True)""")
                 temp_files.append(executed_notebook_filename)
                 logger.info("Notebook execution completed successfully")
 
-                # Get list of generated figures
-                figures = []
+                # Get list of generated figures and encode them
+                figures_data = []
                 if os.path.exists(output_dir):
-                    figures = [f for f in os.listdir(output_dir) if f.endswith(('.png', '.jpg', '.pdf'))]
-                logger.debug(f"Generated figures: {figures}")
+                    for f in os.listdir(output_dir):
+                        if f.endswith(('.png', '.jpg', '.pdf')):
+                            file_path = os.path.join(output_dir, f)
+                            try:
+                                with open(file_path, 'rb') as img_file:
+                                    encoded_image = base64.b64encode(img_file.read()).decode('utf-8')
+                                    figures_data.append({
+                                        'filename': f,
+                                        'data': encoded_image,
+                                        'type': f.split('.')[-1]  # Get file extension
+                                    })
+                            except Exception as e:
+                                logger.error(f"Error reading image file {f}: {str(e)}")
+                                continue
+                
+                logger.debug(f"Processed {len(figures_data)} figures")
 
-                # Read and return the executed notebook along with figure paths
                 logger.debug(f"Reading executed notebook: {executed_notebook_filename}")
                 with open(executed_notebook_filename) as f:
                     executed_nb = f.read()
-                
-                return {
+
+                # Collect results per table
+                results[tablename] = {
                     "executed_notebook": executed_nb,
-                    "figures": [os.path.join(output_dir, f) for f in figures]
+                    "figures": figures_data
                 }
+
 
             except Exception as e:
                 logger.error(f"Error during notebook execution: {str(e)}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"Error during notebook execution: {str(e)}")
             
-    except HTTPException:
-        raise
+        return results
+    
     except Exception as e:
         logger.error(f"Unexpected error in data analysis: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
         
-    finally:
-        # Don't clean up the output directory since we need the figures
-        # But clean up temporary files
-        logger.debug("Starting cleanup of temporary files")
-        for file in temp_files:
-            try:
-                if os.path.exists(file):
-                    os.remove(file)
-                    logger.debug(f"Cleaned up file: {file}")
-            except Exception as e:
-                logger.error(f"Error cleaning up {file}: {str(e)}")
-        # Clean up temp directory
-        try:
-            if os.path.exists("temp_csv"):
-                os.rmdir("temp_csv")
-                logger.debug("Cleaned up temp_csv directory")
-        except Exception as e:
-            logger.error(f"Error cleaning up temp_csv directory: {str(e)}")
+    # finally:
+    #     # Don't clean up the output directory since we need the figures
+    #     # But clean up temporary files
+    #     logger.debug("Starting cleanup of temporary files")
+    #     for file in temp_files:
+    #         try:
+    #             if os.path.exists(file):
+    #                 os.remove(file)
+    #                 logger.debug(f"Cleaned up file: {file}")
+    #         except Exception as e:
+    #             logger.error(f"Error cleaning up {file}: {str(e)}")
+    #     # Clean up temp directory
+    #     try:
+    #         if os.path.exists("temp_csv"):
+    #             os.rmdir("temp_csv")
+    #             logger.debug("Cleaned up temp_csv directory")
+    #     except Exception as e:
+    #         logger.error(f"Error cleaning up temp_csv directory: {str(e)}")

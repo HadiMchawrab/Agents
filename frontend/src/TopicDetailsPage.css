@@ -11,7 +11,7 @@
 }
 
 .topic-info {
-  background: #f8f9fa;
+  background: #ffffff;
   border-radius: 8px;
   padding: 1.2rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -53,6 +53,11 @@
 .topic-content strong {
   color: #2196f3;
   margin-right: 0.5rem;
+}
+
+.topic-content em {
+  color: #6c757d;
+  font-weight: 500;
 }
 
 .topic-section {

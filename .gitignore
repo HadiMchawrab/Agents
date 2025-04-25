@@ -32,5 +32,11 @@ tests_results/
 
 scraping_results/
 return.txt
+backend/api/return2.json
 
 output.txt
+
+backend/csv_adjusted/
+backend/graph_results/
+backend/graph2_results/
+
