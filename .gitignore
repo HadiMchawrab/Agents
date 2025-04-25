@@ -19,7 +19,6 @@ backend/temp.db
 
 web_scraper/
 
-.env
 venv/
 
 test.py
@@ -34,4 +33,5 @@ scraping_results/
 return.txt
 
 output.txt
+/.env
 
