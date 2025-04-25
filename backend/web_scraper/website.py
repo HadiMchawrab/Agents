@@ -36,6 +36,7 @@ class Website:
             logger.info("Waiting for page to load")
             wait_for_page(driver)
 
+<<<<<<< HEAD
             if not self.check_language(driver, lang="en"):
                 self.content = None
                 return
@@ -65,6 +66,57 @@ class Website:
                     current_heading = None
             self.content = content
 
+=======
+                if not self.check_language(driver, lang="en"):
+                    self.content = None
+                    return
+
+                logger.info("Language check passed!")
+                content = ""
+                current_heading = None
+                
+                for element in driver.find_elements(By.XPATH, "//p | //h1 | //h2 | //h3"):
+                    try:
+                        tag = element.tag_name.lower()
+                        text = element.text.strip()
+
+                        if not text:
+                            continue
+
+                        if tag in {"h1", "h2", "h3"}:
+                            current_heading = text
+                            content += f"\n{text}\n"
+                        elif tag == "p":
+                            current_heading = text
+                            content += "\n" + current_heading + "\n"
+                        elif tag == "p" and current_heading is not None:
+                            content += text + "\n"
+                            current_heading = None
+                    except Exception as e:
+                        logger.warning(f"Stale or inaccessible element skipped: {e}")
+                        continue
+                self.content = content
+                if any(bad_phrase in self.content.lower() for bad_phrase in [
+                    "there was a problem providing the content",
+                    "access denied",
+                    "please contact our support team",
+                    "cookies are used by this site",
+                    "copyright © 2024 elsevier",
+                    "you do not have access to",
+                    "verifying you are human"
+                ]):
+                    logger.warning(f"Blocked/irrelevant content detected in {self.url} — skipping.")
+                    self.content = None
+                    return
+                if not self.content:
+                    logger.warning(f"No content found for {self.url}. Saving page source.")
+
+            except Exception as e:
+                logger.error(f"Error extracting content from {self.url}: {e}", exc_info=True)
+                self.content = None
+
+            
+>>>>>>> 70e1b2a288c5fa460b8e61263608bc5032ec3565
     def to_dict_detailed(self):
         return {
             "title": self.title,

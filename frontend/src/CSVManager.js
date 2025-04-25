@@ -68,6 +68,7 @@ const CSVManager = () => {
         body: formData
       });
 
+<<<<<<< HEAD
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
@@ -75,6 +76,47 @@ const CSVManager = () => {
       const result = await response.json();
       console.log('Processing result:', result);
       alert('Files uploaded and processed successfully!');
+=======
+      const response_result = await response.json();
+      console.log('Backend response:', response_result);
+
+      if (!response.ok) {
+        throw new Error(response_result.detail?.message || 'Failed to process files');
+      }
+      const backendData = response_result.result;
+      console.log('Full backend response:', backendData);
+      console.log('Topics from backend:', backendData.topic);
+      console.log('ML Models from backend:', backendData.ML_Models1);
+      console.log('Models per topic:', backendData.ModelsPerTopic);
+      console.log('GPT Columns structure:', backendData.GPT_Columns);
+
+      if (!Array.isArray(backendData.topic)) {
+        throw new Error("Invalid backend response: topic array is missing");
+      }
+
+      const transformedResult = {
+        topics: backendData.topic.map((topicName, index) => {
+          console.log('Processing topic:', topicName);
+          return {
+            topic: topicName,
+            reasoning: (backendData.analyzed_topics?.[index]?.reasoning || ""),
+            GPT_Columns: backendData.GPT_Columns?.[topicName] || [], // Keep the nested array structure
+            Needs: new Set(backendData.Needs?.[topicName] || []),
+            Relationship: new Set(backendData.Relationship?.[topicName] || []),
+            ML_Models: new Set([
+              ...(backendData.ML_Models1?.[index]?.split(",") || []).map(m => m.trim()),
+              ...(backendData.ModelsPerTopic?.[topicName]?.split(",") || []).map(m => m.trim())
+            ])
+          };
+        }),
+        tables: backendData.tables || []
+      };
+
+      console.log('Transformed result:', transformedResult);
+      onProcessComplete(transformedResult);
+      
+      navigate('/results');
+>>>>>>> 70e1b2a288c5fa460b8e61263608bc5032ec3565
     } catch (error) {
       console.error('Error uploading files:', error);
       alert('Error uploading files. Please try again.');
@@ -121,4 +163,4 @@ const CSVManager = () => {
   );
 };
 
-export default CSVManager; 
+export default CSVManager;

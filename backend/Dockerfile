@@ -18,7 +18,25 @@ COPY . .
 ENV PYTHONPATH=/backend
 ENV PYTHONUNBUFFERED=1
 
+<<<<<<< HEAD
 # Expose port
+=======
+# Optional: Prevent Chrome from throwing X errors (good in headless/Docker)
+ENV DISPLAY=:99
+
+# Set working directory
+WORKDIR /backend
+
+COPY requirements.txt . 
+
+RUN pip install -r requirements.txt 
+
+
+# Copy app code
+COPY . .
+
+# Expose FastAPI port
+>>>>>>> 70e1b2a288c5fa460b8e61263608bc5032ec3565
 EXPOSE 5000
 
 # Command to run the application

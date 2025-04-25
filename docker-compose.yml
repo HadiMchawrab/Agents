@@ -23,6 +23,31 @@ services:
     volumes:
       - ./backend:/usr/src/app
     environment:
+<<<<<<< HEAD
       - FLASK_ENV=development
       - FLASK_APP=app.py
       - FLASK_DEBUG=1 
+=======
+      - ENVIRONMENT=development
+      - DEBUG=1
+      - PYTHONUNBUFFERED=1
+      - NOTEBOOK_URL=http://notebook:7000
+    depends_on:
+      - selenium
+      - notebook
+    
+  selenium:
+    image: selenium/standalone-chrome:latest
+    ports:
+      - "4444:4444"
+    shm_size: 2g
+    environment:
+      - SE_NODE_SESSION_TIMEOUT=180
+      - SE_NODE_MAX_SESSIONS=5
+
+  notebook:
+    build: ./notebook
+    volumes:
+      - ./notebook:/backend
+
+>>>>>>> 70e1b2a288c5fa460b8e61263608bc5032ec3565

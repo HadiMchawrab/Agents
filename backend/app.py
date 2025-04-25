@@ -15,6 +15,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 def index():
     return "Hello, World!"
 
+<<<<<<< HEAD
 
 @app.route('/upload-and-process', methods=['POST'])
 def upload_and_process():
@@ -24,6 +25,14 @@ def upload_and_process():
         for file in files:
             if file.filename.endswith('.csv'):
                 file.save(os.path.join(UPLOAD_FOLDER, file.filename))
+=======
+# Configure minimal console-only logging
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)s: %(message)s'
+)
+logger = logging.getLogger(__name__)
+>>>>>>> 70e1b2a288c5fa460b8e61263608bc5032ec3565
 
         # Get the initial state from the form data
         initialState = json.loads(request.form['initialState'])
@@ -31,8 +40,20 @@ def upload_and_process():
         # Convert the csv_files array back to a set
         initialState['csv_files'] = set(initialState['csv_files'])
 
+<<<<<<< HEAD
         # Execute the graph with the initial state
         result = test_graph(initialState)
+=======
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(router)
+>>>>>>> 70e1b2a288c5fa460b8e61263608bc5032ec3565
 
         return jsonify({
             'status': 'success',
