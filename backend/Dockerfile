@@ -22,11 +22,13 @@ ENV DISPLAY=:99
 # Set working directory
 WORKDIR /backend
 
+COPY requirements.txt . 
+
+RUN pip install -r requirements.txt 
+
+
 # Copy app code
 COPY . .
-
-# Install Python dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Expose FastAPI port
 EXPOSE 5000

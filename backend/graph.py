@@ -16,54 +16,57 @@ from web_scraper.scraper import scrape
 import sqlite3
 import pandas as pd
 import json
-import io
 import logging
 from dotenv import load_dotenv
+from typing import List, Dict
+
 
 # Load environment variables
-load_dotenv()
+if not load_dotenv():
+    logging.warning("Failed to load .env file. Ensure it exists and is properly configured.")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+if not CLAUDE_API_KEY:
+    raise ValueError("CLAUDE_API_KEY is not set. Please check your .env file.")
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 
 class State(TypedDict):
-    tables: str 
+    tables: set 
     analyzed_topics: list[set]
     csv_files: set
     topic: List[str]
     ScrapedArticles: set
     AnalyzedArticles: set[dict[str, dict[str, str]]]
     Relationship: set
-    Explanation: set
     ModelsPerTopic: set
     ML_Models1: set
-    
+    Needs: set
+    GPT_Columns: set
 
 graph_builder = StateGraph(State)
 
 
-
-
-
-def get_table_columns(state: State, db_name: str = 'temp.db') -> str:
+def get_table_columns(state: dict, db_name: str = 'temp.db') -> dict:
     conn = sqlite3.connect(db_name)
+    results = []
     try:
-        table_columns = ''
-        for csv_file in state["csv_files"]:
+        for csv_file in state.get("csv_files", []):
             if not os.path.exists(csv_file):
                 continue
-            table_name = os.path.splitext(os.path.basename(csv_file))[0]            
+            table_name = os.path.splitext(os.path.basename(csv_file))[0]
             df = pd.read_csv(csv_file)
             df.to_sql(table_name, conn, if_exists='replace', index=False)
             columns = pd.read_sql_query(f"PRAGMA table_info({table_name})", conn)['name'].tolist()
-            table_columns += f'Table {table_name}:\nHas Columns: {",".join(columns)}\n\n'
+            results.append({table_name: columns})
     except Exception as e:
-        raise
+        logging.error(f"Error processing CSV files: {str(e)}")
+        raise e
     finally:
-        conn.close()    
-    return {"tables": table_columns}
-
+        conn.close()
+    
+    # Return a dictionary with 'tables' as the key
+    return {"tables": results}
 
 
 
@@ -77,15 +80,17 @@ def analyze_tables_node(state: State):
 
     # Retrieve the API key from the environment
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-
+    # stringify the tables
+    tables = state["tables"]
+    tables_str = "\n".join([f"{table_name}: {columns}" for table in tables for table_name, columns in table.items()])
     model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY)
     input_messages= [SystemMessage(content = """Given tables and columns names, extract the topic of the database. 
                                                 Provide 4 possible topics where  machine learning models would be implemented on tabular database similar to the one above to improve the performance of such a company.
                                                 Hence the 4 topics you are returning are the fields we want to dive into in our web scraper, hence they should be clear and have the key words in place
                                                 Return them in a JSON array of objects with topic names and reasoning"""), 
-                     HumanMessage(content = """Return the response **only** in this strict JSON format, with no additional text or explanations. DON'T GENERATE ANY TEXT OUTSIDE of the json format("Machine learning models employed in" does not change in all of the topics):
+                     HumanMessage(content = """Return the response *only* in this strict JSON format, with no additional text or explanations. DON'T GENERATE ANY TEXT OUTSIDE of the json format("Machine learning models employed in" does not change in all of the topics):
                     
-                                        ```json
+                                        json
                                         {
                                             "answer": [
                                                 {
@@ -100,14 +105,16 @@ def analyze_tables_node(state: State):
                                                 }
                                             ]
                                         }
-                                                ```
+                                                
                                    """),
-                    HumanMessage(content = state["tables"])]
+                    HumanMessage(content = f"""Tables and columns names:
+                                        {tables_str}
+                                        """)]
     
     ai_message = model.invoke(input_messages)
-    if not ai_message.content.startswith("```json"):
-        start_index = ai_message.content.find("```json") + len("```json")
-        end_index = ai_message.content.find("```", start_index)
+    if not ai_message.content.startswith("json"):
+        start_index = ai_message.content.find("json") + len("json")
+        end_index = ai_message.content.find("", start_index)
         ai_message = ai_message.content[start_index:end_index].strip()
     else:
         ai_message = ai_message.content[7:-3].strip()
@@ -120,10 +127,6 @@ def analyze_tables_node(state: State):
     
     logging.info(f"ML Models: {ML_Models1}")
     return {"analyzed_topics": ans, "topic": topics, "ML_Models1": ML_Models1}
-
-
-
-
 
 
 
@@ -147,7 +150,7 @@ def scrape_node(state: State):
 
         Input_messages= [SystemMessage(content = """You are given 3 web pages in 1 json file, summarize the content in a clear and concise manner.
                                                     Focus on the machine learning models used in the web page not previously mentioned in the previously extracted ML models from the topic and how they affect the performance of the company."""), 
-                            HumanMessage(content = """DON'T GENERATE ANY TEXT OUTSIDE of the json format, DO NOT output "json", "Json", or any text before the opening brace '{'. Start the output *directly* with {.
+                            HumanMessage(content = """DON'T GENERATE ANY TEXT OUTSIDE of the json format, DO NOT output "json", "Json", or any text before the opening brace '{'. Start the output directly with {.
 
                                     
                                     {
@@ -168,13 +171,13 @@ def scrape_node(state: State):
         content = ai_message.content
 
         # Strip triple backticks if they exist
-        if "```json" in content:
-            start_index = content.find("```json") + len("```json")
-            end_index = content.find("```", start_index)
+        if "json" in content:
+            start_index = content.find("json") + len("json")
+            end_index = content.find("", start_index)
             content = content[start_index:end_index].strip()
-        elif "```" in content:
+        elif "" in content:
             # just in case it starts directly with triple backticks
-            content = content.strip("```").strip()
+            content = content.strip("").strip()
 
         try:
             json_response = json.loads(content)
@@ -198,9 +201,12 @@ def relevance_node(state: State):
         temperature=0,
         anthropic_api_key=CLAUDE_API_KEY
     )
+    tables = state["tables"]
+    tables_str = "\n".join([f"{table_name}: {columns}" for table in tables for table_name, columns in table.items()])
 
     Relationships = {}
-    Explanations = {}
+    GPT_Columns = {}
+    Needs = {}
 
     for i, topic in enumerate(state["topic"]):
         Input_messages = [
@@ -209,29 +215,30 @@ def relevance_node(state: State):
                                      You are given the interpretation of the tables and column names.
                                      Find the relevance of each of the ML models posed with the tables and columns names of the database.
                                   """),
-            HumanMessage(content="""Return the response **only** in this strict JSON format, with no additional text or explanations:
-                                    ```json
+            HumanMessage(content="""Return the response *only* in this strict JSON format, with no additional text or explanations:
+                                    json
                                     {
-                                        "Relationship": "Choose the columns and tables from the initial tables and columns which are relevant to the ML models for the given topic(Make the columns you choose clear in the output)",
-                                        "Explanation": "Explains the relationship between the columns names and how they are going to be used in the ML models given in the modelsWeUse"
+                                        "Relationship": "Explains the relationship between the ML model and the tables and columns names of the database",
+                                        "Columns": "[{table1:[col1,col2]}, {table2:[col1,col]}](Return a list which contains dictionaries with the table name and the 7 columns maximum which GPT chooses as the key to the table name),
+                                        "Needs": "Tell the user how the columns we need for this certain topic are going to be used in training the ML model and what data types are needed for the end goal of the ML model(classification, regression, etc)"
                                     }
-                                    ```"""),
-            HumanMessage(content=f"The initial tables and columns: {state['tables']}"),
+                                    """),
+            HumanMessage(content=f"The initial tables and columns: {tables_str}"),
             HumanMessage(content=json.dumps(state["analyzed_topics"][i])), 
             HumanMessage(content=f"modelsWeUse: {state['ModelsPerTopic'][topic]}")]  
 
         ai_response = model.invoke(Input_messages)
+        logging.info(f"Claude response: {ai_response.content}")
         raw_content = ai_response.content.strip()
         logging.info(f"Claude raw response: {raw_content}")
 
-        # Extract JSON from fenced block
         json_text = None
-        if raw_content.startswith("```json"):
-            start_index = raw_content.find("```json") + len("```json")
-            end_index = raw_content.find("```", start_index)
+        if raw_content.startswith("json"):
+            start_index = raw_content.find("json") + len("json")
+            end_index = raw_content.find("", start_index)
             json_text = raw_content[start_index:end_index].strip()
-        elif raw_content.startswith("```"):
-            json_text = raw_content.strip("```").strip()
+        elif raw_content.startswith(""):
+            json_text = raw_content.strip("").strip()
         else:
             json_text = raw_content  # Try parsing whatever we get
 
@@ -242,23 +249,30 @@ def relevance_node(state: State):
             raise ValueError("Claude's response was not valid JSON.") from e
 
         Relationships[topic] = [parsed_json.get("Relationship", "No Relationship returned")]
-        Explanations[topic] = [parsed_json.get("Explanation", "No Explanation returned")]
-    
-
-    return {"Relationship": Relationships, "Explanation": Explanations}
+        GPT_Columns[topic] = [parsed_json.get("Columns", "No Columns returned")]
+        Needs[topic] = [parsed_json.get("Needs", "No Needs returned")]
 
 
+    return {"Relationship": Relationships, "GPT_Columns": GPT_Columns, "Needs": Needs}
 
-# Add nodes to the graph
+
+
+
+
+
+
+
 graph_builder.add_node("extract_tables", get_table_columns)
 graph_builder.add_node("analyze_tables", analyze_tables_node)
 graph_builder.add_node("scrape_articles", scrape_node)
 graph_builder.add_node("relevance", relevance_node)
 
+
 # Add edges
 graph_builder.add_edge("extract_tables", "analyze_tables")
 graph_builder.add_edge("analyze_tables", "scrape_articles")
 graph_builder.add_edge("scrape_articles", "relevance")
+
 
 # Set entry and finish points
 graph_builder.set_entry_point("extract_tables")
@@ -270,7 +284,7 @@ graph = graph_builder.compile()
 
 def test_graph():    
     initial_state = {
-        "tables": "",
+        "tables": {},
         "analyzed_topics": [],
         "csv_files": {'csv_test/banking.csv','csv_test/data.csv'},
         "topic": [],
@@ -278,8 +292,9 @@ def test_graph():
         "AnalyzedArticles": {},
         "ModelsPerTopic": {},
         "Relationship": {},
-        "Explanation": {},
-        "ML_Models1": {}
+        "GPT_Columns": {},
+        "ML_Models1": {},
+        "Needs": {}
     }
     
     # Run the graph
@@ -297,10 +312,12 @@ def test_graph():
     print(final_state["ModelsPerTopic"])
     print("\n Relationships:")
     print(final_state["Relationship"])
-    print("\n Explanations:")
-    print(final_state["Explanation"])
+    print("\n GPT_Columns:")
+    print(final_state["GPT_Columns"])
+    print("\n Needs:")
+    print(final_state["Needs"])
     
     
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     test_graph()

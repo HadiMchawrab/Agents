@@ -1,34 +1,46 @@
+import sys
+import os
+from pathlib import Path
+
+# Add the project root to the Python path
+project_root = str(Path(__file__).parent.parent)
+sys.path.append(project_root)
+
 from typing import TypedDict, List, Dict, Any
-from IPython.display import display
-from PIL import Image
+# from IPython.display import display
+# from PIL import Image
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
-from web_scraper.scraper import scrape, scrape_v2, scrape_remote
+from web_scraper.scraper import scrape, scrape_remote
 import sqlite3
 import pandas as pd
-import os
 import json
-import io
 import logging
 from dotenv import load_dotenv
-import time
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from anthropic import OverloadedError
+from typing import List, Dict
+
+load_dotenv()
+
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+if CLAUDE_API_KEY is None:
+    raise ValueError("CLAUDE_API_KEY environment variable not set.")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class State(TypedDict):
-    tables: str 
+    tables: set 
     analyzed_topics: list[set]
     csv_files: set
     topic: List[str]
     ScrapedArticles: set
     AnalyzedArticles: set[dict[str, dict[str, str]]]
     Relationship: set
-    Explanation: set
+    Needs: set
     ModelsPerTopic: set
     ML_Models1: set
+    GPT_Columns: set
+
     
 
 graph_builder = StateGraph(State)
@@ -37,121 +49,100 @@ graph_builder = StateGraph(State)
 
 
 
-def get_table_columns(state: State, db_name: str = 'temp.db') -> str:
+def get_table_columns(state: dict, db_name: str = 'temp.db') -> dict:
     conn = sqlite3.connect(db_name)
+    results = []
     try:
-        table_columns = ''
-        for csv_file in state["csv_files"]:
+        for csv_file in state.get("csv_files", []):
             if not os.path.exists(csv_file):
                 continue
-            table_name = os.path.splitext(os.path.basename(csv_file))[0]            
+            table_name = os.path.splitext(os.path.basename(csv_file))[0]
             df = pd.read_csv(csv_file)
             df.to_sql(table_name, conn, if_exists='replace', index=False)
             columns = pd.read_sql_query(f"PRAGMA table_info({table_name})", conn)['name'].tolist()
-            table_columns += f'Table {table_name}:\nHas Columns: {",".join(columns)}\n\n'
+            results.append({table_name: columns})
     except Exception as e:
-        raise
+        logging.error(f"Error processing CSV files: {str(e)}")
+        raise e
     finally:
-        conn.close()    
-    return {"tables": table_columns}
+        conn.close()
+    
+    # Return a dictionary with 'tables' as the key
+    return {"tables": results}
 
 
 
 
-
-
-
-
-@retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=2, min=4, max=60),
-    retry=retry_if_exception_type(OverloadedError)
-)
 def analyze_tables_node(state: State):
     # Load environment variables from .env file
     load_dotenv()
 
     # Retrieve the API key from the environment
     CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-    if not CLAUDE_API_KEY:
-        raise ValueError("CLAUDE_API_KEY environment variable is not set")
-
-    try:
-        model = ChatAnthropic(
-            model_name="claude-3-7-sonnet-20250219",
-            temperature=0,
-            anthropic_api_key=CLAUDE_API_KEY,
-            max_retries=3
-        )
-        
-        input_messages = [
-            SystemMessage(content="""Given tables and columns names, extract the topic of the database. 
-                                    Provide 4 possible topics where machine learning models would be implemented on tabular database similar to the one above to improve the performance of such a company.
-                                    Hence the 4 topics you are returning are the fields we want to dive into in our web scraper, hence they should be clear and have the key words in place
-                                    Return them in a JSON array of objects with topic names and reasoning"""), 
-            HumanMessage(content="""Return the response **only** in this strict JSON format, with no additional text or explanations. DON'T GENERATE ANY TEXT OUTSIDE of the json format("Machine learning models employed in" does not change in all of the topics):
-            
-                                ```json
-                                {
-                                    "answer": [
+    # stringify the tables
+    tables = state["tables"]
+    tables_str = "\n".join([f"{table_name}: {columns}" for table in tables for table_name, columns in table.items()])
+    model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY)
+    input_messages= [SystemMessage(content = """Given tables and columns names, extract the topic of the database. 
+                                                Provide 4 possible topics where  machine learning models would be implemented on tabular database similar to the one above to improve the performance of such a company.
+                                                Hence the 4 topics you are returning are the fields we want to dive into in our web scraper, hence they should be clear and have the key words in place
+                                                Return them in a JSON array of objects with topic names and reasoning"""), 
+                     HumanMessage(content = """Return the response *only* in this strict JSON format, with no additional text or explanations. DON'T GENERATE ANY TEXT OUTSIDE of the json format("Machine learning models employed in" does not change in all of the topics):
+                    
+                                        json
                                         {
-                                            "topic": "'Topic 1' and why it is important to the company and how it optimizes the performance of the company",
-                                            "ML_Models": "ML Models 1 inferred by Claude from the articles",
-                                            "reasoning": "Reasoning 1 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
-                                        },
-                                        {
-                                            "topic": "Machine learning models employed in 'Topic 2'",
-                                            "ML_Models": "ML Models 2 inferred by Claude from the articles"
-                                            "reasoning": "Reasoning 2 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
+                                            "answer": [
+                                                {
+                                                    "topic": "'Topic 1' and why it is important to the company and how it optimizes the performance of the company",
+                                                    "ML_Models": "ML Models 1 inferred by Claude from the articles",
+                                                    "reasoning": "Reasoning 1 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
+                                                },
+                                                {
+                                                    "topic": "Machine learning models employed in 'Topic 2'",
+                                                    "ML_Models": "ML Models 2 inferred by Claude from the articles"
+                                                    "reasoning": "Reasoning 2 or the relationship between the topic and the ML Model and what columns and data types could possibly be used in the ML model"
+                                                }
+                                            ]
                                         }
-                                    ]
-                                }
-                                ```
-                           """),
-            HumanMessage(content=state["tables"])
-        ]
-        
-        ai_message = model.invoke(input_messages)
-        content = ai_message.content
+                                                
+                                   """),
+                    HumanMessage(content = f"""Tables and columns names:
+                                        {tables_str}
+                                        """)]
+    
+    ai_message = model.invoke(input_messages)
+    
+    content = ai_message.content.strip()
 
-        # Extract JSON content
-        if "```json" in content:
-            start_index = content.find("```json") + len("```json")
-            end_index = content.find("```", start_index)
-            content = content[start_index:end_index].strip()
-        else:
-            content = content.strip()
+    # Look for fenced JSON
+    if "```json" in content:
+        start_index = content.find("```json") + len("```json")
+        end_index = content.find("```", start_index)
+        content = content[start_index:end_index].strip()
+    elif "```" in content:
+        # If just triple backticks
+        content = content.replace("```", "").strip()
 
-        try:
-            json_response = json.loads(content)
-            ans = json_response['answer']
-            topics = [topic["topic"] for topic in ans]
-            ML_Models1 = [topic["ML_Models"] for topic in ans]
-            
-            logging.info(f"Topics: {topics}")
-            logging.info(f"ML Models: {ML_Models1}")
-            
-            return {
-                "analyzed_topics": ans,
-                "topic": topics,
-                "ML_Models1": ML_Models1
-            }
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse JSON response: {content}")
-            raise ValueError("Invalid JSON response from Claude") from e
+    # Now parse
+    try:
+        json_response = json.loads(content)
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to decode JSON from Claude in analyze_tables_node:\n{content}")
+        raise e
 
-    except Exception as e:
-        logging.error(f"Error in analyze_tables_node: {str(e)}")
-        raise
+    ans = json_response['answer']
+    topics = [topic["topic"] for topic in ans]
+    logging.info(f"Topics: {topics}")
 
-
-
+    ML_Models1 = [topic["ML_Models"] for topic in ans]
+    
+    logging.info(f"ML Models: {ML_Models1}")
+    return {"analyzed_topics": ans, "topic": topics, "ML_Models1": ML_Models1}
 
 
 
 
 def scrape_node(state: State):
-    CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
     model = ChatAnthropic(model_name="claude-3-5-haiku-20241022", temperature=0, anthropic_api_key=CLAUDE_API_KEY)
     articles = {}
     ans = {}
@@ -171,7 +162,7 @@ def scrape_node(state: State):
 
         Input_messages= [SystemMessage(content = """You are given 3 web pages in 1 json file, summarize the content in a clear and concise manner.
                                                     Focus on the machine learning models used in the web page not previously mentioned in the previously extracted ML models from the topic and how they affect the performance of the company."""), 
-                            HumanMessage(content = """DON'T GENERATE ANY TEXT OUTSIDE of the json format, DO NOT output "json", "Json", or any text before the opening brace '{'. Start the output *directly* with {.
+                            HumanMessage(content = """DON'T GENERATE ANY TEXT OUTSIDE of the json format, DO NOT output "json", "Json", or any text before the opening brace '{'. Start the output directly with {.
 
                                     
                                     {
@@ -191,14 +182,14 @@ def scrape_node(state: State):
         logging.info(ai_message.content)
         content = ai_message.content
 
-        # Strip triple backticks if they exist
+        # Handle fenced JSON
         if "```json" in content:
             start_index = content.find("```json") + len("```json")
             end_index = content.find("```", start_index)
             content = content[start_index:end_index].strip()
         elif "```" in content:
-            # just in case it starts directly with triple backticks
-            content = content.strip("```").strip()
+            content = content.replace("```", "").strip()
+
 
         try:
             json_response = json.loads(content)
@@ -213,16 +204,20 @@ def scrape_node(state: State):
     return {"ScrapedArticles": articles, "AnalyzedArticles": ans, "ModelsPerTopic": ModelsPerTopic}
 
 
+
+
 def relevance_node(state: State):
-    CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
     model = ChatAnthropic(
         model_name="claude-3-7-sonnet-20250219",
         temperature=0,
         anthropic_api_key=CLAUDE_API_KEY
     )
+    tables = state["tables"]
+    tables_str = "\n".join([f"{table_name}: {columns}" for table in tables for table_name, columns in table.items()])
 
     Relationships = {}
-    Explanations = {}
+    GPT_Columns = {}
+    Needs = {}
 
     for i, topic in enumerate(state["topic"]):
         Input_messages = [
@@ -231,31 +226,33 @@ def relevance_node(state: State):
                                      You are given the interpretation of the tables and column names.
                                      Find the relevance of each of the ML models posed with the tables and columns names of the database.
                                   """),
-            HumanMessage(content="""Return the response **only** in this strict JSON format, with no additional text or explanations:
-                                    ```json
+            HumanMessage(content="""Return the response *only* in this strict JSON format, with no additional text or explanations:
+                                    json
                                     {
-                                        "Relationship": "Choose the columns and tables from the initial tables and columns which are relevant to the ML models for the given topic(Make the columns you choose clear in the output)",
-                                        "Explanation": "Explains the relationship between the columns names and how they are going to be used in the ML models given in the modelsWeUse"
+                                        "Relationship": "Explains the relationship between the ML model and the tables and columns names of the database",
+                                        "Columns": "[{table1:[col1,col2]}, {table2:[col1,col]}](Return a list which contains dictionaries with the table name and the 7 columns maximum which GPT chooses as the key to the table name),
+                                        "Needs": "Tell the user how the columns we need for this certain topic are going to be used in training the ML model and what data types are needed for the end goal of the ML model(classification, regression, etc)"
                                     }
-                                    ```"""),
-            HumanMessage(content=f"The initial tables and columns: {state['tables']}"),
+                                    """),
+            HumanMessage(content=f"The initial tables and columns: {tables_str}"),
             HumanMessage(content=json.dumps(state["analyzed_topics"][i])), 
             HumanMessage(content=f"modelsWeUse: {state['ModelsPerTopic'][topic]}")]  
 
         ai_response = model.invoke(Input_messages)
+        logging.info(f"Claude response: {ai_response.content}")
         raw_content = ai_response.content.strip()
         logging.info(f"Claude raw response: {raw_content}")
 
-        # Extract JSON from fenced block
         json_text = None
-        if raw_content.startswith("```json"):
+        if "```json" in raw_content:
             start_index = raw_content.find("```json") + len("```json")
             end_index = raw_content.find("```", start_index)
             json_text = raw_content[start_index:end_index].strip()
-        elif raw_content.startswith("```"):
-            json_text = raw_content.strip("```").strip()
+        elif "```" in raw_content:
+            json_text = raw_content.replace("```", "").strip()
         else:
-            json_text = raw_content  # Try parsing whatever we get
+            json_text = raw_content
+
 
         try:
             parsed_json = json.loads(json_text)
@@ -264,10 +261,11 @@ def relevance_node(state: State):
             raise ValueError("Claude's response was not valid JSON.") from e
 
         Relationships[topic] = [parsed_json.get("Relationship", "No Relationship returned")]
-        Explanations[topic] = [parsed_json.get("Explanation", "No Explanation returned")]
-    
+        GPT_Columns[topic] = [parsed_json.get("Columns", "No Columns returned")]
+        Needs[topic] = [parsed_json.get("Needs", "No Needs returned")]
 
-    return {"Relationship": Relationships, "Explanation": Explanations}
+
+    return {"Relationship": Relationships, "GPT_Columns": GPT_Columns, "Needs": Needs}
 
 
 
@@ -290,7 +288,9 @@ graph_builder.set_finish_point("relevance")
 # Compile the graph
 graph = graph_builder.compile()
 
-def run_graph(csv_files: List[str]):   
+
+
+def run_graph(csv_files: List[str], descriptions: Dict[str, str] = None) -> State:   
     csv_files = set(csv_files)
     
     initial_state = {
@@ -302,8 +302,9 @@ def run_graph(csv_files: List[str]):
         "AnalyzedArticles": {},
         "ModelsPerTopic": {},
         "Relationship": {},
-        "Explanation": {},
-        "ML_Models1": {}
+        "GPT_Columns": {},
+        "ML_Models1": {},
+        "Needs": {}
     }
     
     # Run the graph
@@ -321,10 +322,16 @@ def run_graph(csv_files: List[str]):
     print(final_state["ModelsPerTopic"])
     print("\n Relationships:")
     print(final_state["Relationship"])
-    print("\n Explanations:")
-    print(final_state["Explanation"])
+    print("\n GPT_Columns:")
+    print(final_state["GPT_Columns"])
+    print("\n Needs:")
+    print(final_state["Needs"])
     
     return final_state
 
+
+def test():
+    run_graph({"csv_files/banking.csv", "csv_files/data.csv"})
+
 if __name__ == "__main__":
-    run_graph(["csv_files/banking.csv, csv_files/data.csv"])
+    run_graph({"csv_files/banking.csv", "csv_files/data.csv"})

@@ -1,0 +1,42 @@
+{
+    "tables": [
+        {
+            "Electric_Vehicle_Population_Data": [
+                "Vehicle Location",
+                "Postal Code",
+                "County",
+                "City",
+                "Electric Range",
+                "Electric Vehicle Type",
+                "Electric Utility"
+            ]
+        }
+    ],
+    "adjusted_columns": {
+        "Electric_Vehicle_Population_Data": [
+            "Vehicle Location:object",
+            "Postal Code:float64",
+            "County:object",
+            "City:object",
+            "Electric Range:float64",
+            "Electric Vehicle Type:object",
+            "Electric Utility:object"
+        ]
+    },
+    "csv_files": [
+        "csv_test/Electric_Vehicle_Population_Data.csv"
+    ],
+    "topic": "Machine learning models employed in charging infrastructure planning",
+    "Relationship": [
+        "The ML models (spatial clustering, demand forecasting, and location optimization) directly relate to the Electric_Vehicle_Population_Data table by using geographic and vehicle-specific information to optimize charging infrastructure placement. The models analyze spatial distribution of EVs, predict future charging needs, and determine optimal charging station locations based on existing EV population data."
+    ],
+    "ML_Models": [
+        "Spatial clustering algorithms",
+        "Demand forecasting models",
+        "Location optimization algorithms",
+        "Stacked Ensemble Learning Model",
+        "Bayesian Network",
+        "Random Forest with Kernel Density Estimation"
+    ],
+    "Analysis": {}
+}

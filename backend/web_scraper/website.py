@@ -90,68 +90,12 @@ class Website:
                 ]):
                     logger.warning(f"Blocked/irrelevant content detected in {self.url} — skipping.")
                     self.content = None
+                    return
                 if not self.content:
                     logger.warning(f"No content found for {self.url}. Saving page source.")
-                    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    file_name = f"{ts}_debug_failed_{self.title[:20].replace(' ', '_')}.html"
-                    os.makedirs("debug_pages", exist_ok=True)
-                    with open(os.path.join("debug_pages", file_name), "w", encoding="utf-8") as f:
-                        f.write(driver.page_source)
 
             except Exception as e:
                 logger.error(f"Error extracting content from {self.url}: {e}", exc_info=True)
-                self.content = None
-    
-    def extract_content_v2(self, driver: webdriver):
-
-        with timer("One Website Extraction Time [V2]"):
-            try:
-                logger.info(f"[V2] Loading {self.url}")
-                
-                try:
-                    driver.get(self.url)
-                    wait_for_element(driver, "//p | //h1 | //h2 | //h3")
-                except Exception:
-                    logger.warning("[V2] Initial load failed. Retrying once...")
-                    driver.refresh()
-                    wait_for_element(driver, "//p | //h1 | //h2 | //h3")
-                    
-                wait_for_page(driver)
-
-                # Check language before parsing
-                if not self.check_language(driver, lang="en"):
-                    self.content = None
-                    return
-
-                # Use BeautifulSoup to parse the rendered page
-                html = driver.page_source
-                soup = BeautifulSoup(html, "html.parser")
-
-                logger.info("[V2] Parsing page with BeautifulSoup...")
-                content = ""
-                for tag in soup.find_all(["h1", "h2", "h3", "p"]):
-                    text = tag.get_text(strip=True)
-                    if text:
-                        if tag.name in ["h1", "h2", "h3"]:
-                            content += f"\n{text}\n"
-                        elif tag.name == "p":
-                            content += text + "\n"
-
-                self.content = content.strip()
-
-                if not self.content:
-                    logger.warning(f"[V2] No content found for {self.url}. Saving page source and screenshot.")
-                    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    safe_title = self.title[:20].replace(' ', '_')
-                    base_name = f"{ts}_debug_failed_{safe_title}"
-
-                    os.makedirs("debug_pages", exist_ok=True)
-                    with open(os.path.join("debug_pages", f"{base_name}.html"), "w", encoding="utf-8") as f:
-                        f.write(html)
-                    driver.save_screenshot(os.path.join("debug_pages", f"{base_name}.png"))
-
-            except Exception as e:
-                logger.error(f"[V2] Error extracting content from {self.url}: {e}", exc_info=True)
                 self.content = None
 
             

@@ -2,32 +2,24 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ResultsPage.css';
 
-const ResultsPage = ({ topics, tables, columnsByTable, analyzedArticles, scrapedArticles, relationships, explanations, modelsPerTopic, mlModels }) => {
+const ResultsPage = ({ topics, tables }) => {
   const navigate = useNavigate();
 
   const handleTopicClick = (topic) => {
-    console.log('ResultsPage - columnsByTable:', columnsByTable);
-    console.log('ResultsPage - tables:', tables);
-    console.log('ResultsPage - topics:', topics);
-    console.log('ResultsPage - analyzedArticles:', analyzedArticles);
-    console.log('ResultsPage - scrapedArticles:', scrapedArticles);
-    console.log('ResultsPage - relationships:', relationships);
-    console.log('ResultsPage - explanations:', explanations);
-    console.log('ResultsPage - modelsPerTopic:', modelsPerTopic);
-    console.log('ResultsPage - mlModels:', mlModels);
+    console.log('ResultsPage - Clicked topic:', topic.topic);
+    console.log('ResultsPage - GPT_Columns for topic:', topic.GPT_Columns);
     
     navigate('/topic-details', { 
       state: { 
-        topic, 
-        tables, 
-        columnsByTable,
-        analyzedArticles,
-        scrapedArticles,
-        relationships,
-        explanations,
-        modelsPerTopic,
-        mlModels,
-        allTopics: topics
+        topic: {
+          topic: topic.topic,
+          reasoning: topic.reasoning,
+          Relationship: topic.Relationship,
+          ML_Models: topic.ML_Models,
+          Needs: topic.Needs,
+          GPT_Columns: topic.GPT_Columns
+        },
+        tables
       } 
     });
   };
@@ -43,6 +35,13 @@ const ResultsPage = ({ topics, tables, columnsByTable, analyzedArticles, scraped
             onClick={() => handleTopicClick(topic)}
           >
             <h3>{topic.topic}</h3>
+
+            <div className="topic-section">
+              <h4>Reasoning</h4>
+              <ul className="topic-list">
+                <li>{topic.reasoning}</li>
+              </ul>
+            </div>
             
             <div className="topic-section">
               <h4>Relationship</h4>
@@ -54,27 +53,18 @@ const ResultsPage = ({ topics, tables, columnsByTable, analyzedArticles, scraped
             </div>
 
             <div className="topic-section">
-              <h4>Explanation</h4>
+              <h4>Needs</h4>
               <ul className="topic-list">
-                {topic.Explanation && Array.from(topic.Explanation).map((exp, i) => (
+                {topic.Needs && Array.from(topic.Needs).map((exp, i) => (
                   <li key={i}>{exp}</li>
                 ))}
               </ul>
             </div>
 
             <div className="topic-section">
-              <h4>Initial Models</h4>
+              <h4>ML Models</h4>
               <ul className="topic-list">
-                {topic.ML_Models1 && Array.from(topic.ML_Models1).map((model, i) => (
-                  <li key={i}>{model}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="topic-section">
-              <h4>Models from Articles</h4>
-              <ul className="topic-list">
-                {topic.ModelsPerTopic && Array.from(topic.ModelsPerTopic).map((model, i) => (
+                {topic.ML_Models && Array.from(topic.ML_Models).map((model, i) => (
                   <li key={i}>{model}</li>
                 ))}
               </ul>
@@ -86,4 +76,4 @@ const ResultsPage = ({ topics, tables, columnsByTable, analyzedArticles, scraped
   );
 };
 
-export default ResultsPage; 
+export default ResultsPage;

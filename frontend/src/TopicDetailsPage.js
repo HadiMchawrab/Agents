@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './TopicDetailsPage.css';
 
@@ -9,26 +9,57 @@ const TopicDetailsPage = () => {
   console.log('TopicDetailsPage - Full location state:', location.state);
   
   const topic = location.state?.topic;
-  const tables = location.state?.tables;
-  const columnsByTable = location.state?.columnsByTable;
-  const analyzedArticles = location.state?.analyzedArticles;
-  const scrapedArticles = location.state?.scrapedArticles;
-  const relationships = location.state?.relationships;
-  const explanations = location.state?.explanations;
-  const modelsPerTopic = location.state?.modelsPerTopic;
-  const mlModels = location.state?.mlModels;
-  const allTopics = location.state?.allTopics;
+  const allTables = location.state?.tables || [];
   
-  console.log('TopicDetailsPage - topic:', topic);
-  console.log('TopicDetailsPage - tables:', tables);
-  console.log('TopicDetailsPage - columnsByTable:', columnsByTable);
-  console.log('TopicDetailsPage - analyzedArticles:', analyzedArticles);
-  console.log('TopicDetailsPage - scrapedArticles:', scrapedArticles);
-  console.log('TopicDetailsPage - relationships:', relationships);
-  console.log('TopicDetailsPage - explanations:', explanations);
-  console.log('TopicDetailsPage - modelsPerTopic:', modelsPerTopic);
-  console.log('TopicDetailsPage - mlModels:', mlModels);
-  console.log('TopicDetailsPage - allTopics:', allTopics);
+  // Get tables from GPT_Columns for current topic
+  const getGptTablesAndColumns = () => {
+    const gptData = topic?.GPT_Columns?.[0]?.[0] || {};
+    return gptData;
+  };
+  
+  // Check if a table has any columns not used by GPT
+  const hasAvailableColumns = (tableName) => {
+    const gptData = getGptTablesAndColumns();
+    const gptColumns = gptData[tableName] || [];
+    
+    // Get all columns for this table
+    const tableObj = allTables.find(obj => Object.keys(obj)[0] === tableName);
+    const allColumns = tableObj ? tableObj[tableName] : [];
+    
+    // Return true if there are any columns not in GPT's selection
+    return allColumns.some(column => !gptColumns.includes(column));
+  };
+  
+  // Get all available tables that have unused columns
+  const getAvailableTablesFromAll = () => {
+    // Get all available tables from the initial data
+    const availableTables = allTables.map(tableObj => Object.keys(tableObj)[0]);
+    console.log('All available tables:', availableTables);
+    
+    // Filter tables - keep only those that have available columns
+    const filteredTables = availableTables.filter(table => hasAvailableColumns(table));
+    console.log('Filtered tables (with available columns):', filteredTables);
+    
+    return filteredTables;
+  };
+
+  // Get available columns that aren't in GPT_Columns for the selected table
+  const getAvailableColumnsForTable = (tableName) => {
+    const gptData = getGptTablesAndColumns();
+    const gptColumns = gptData[tableName] || [];
+    console.log('GPT suggested columns for', tableName, ':', gptColumns);
+    
+    // Get all columns for this table
+    const tableObj = allTables.find(obj => Object.keys(obj)[0] === tableName);
+    const allColumns = tableObj ? tableObj[tableName] : [];
+    console.log('All available columns for', tableName, ':', allColumns);
+    
+    // Filter out columns that are already in GPT_Columns
+    const filteredColumns = allColumns.filter(column => !gptColumns.includes(column));
+    console.log('Filtered columns for', tableName, ':', filteredColumns);
+    
+    return filteredColumns;
+  };
   
   const [dropdownRows, setDropdownRows] = useState([
     { id: 1, selectedTable: '', selectedColumns: [] }
@@ -66,87 +97,75 @@ const TopicDetailsPage = () => {
   };
 
   const getAvailableTables = (currentRowId) => {
+    const availableTables = getAvailableTablesFromAll();
     const selectedTables = dropdownRows
       .filter(row => row.id !== currentRowId)
       .map(row => row.selectedTable);
-    return tables.filter(table => !selectedTables.includes(table));
+    return availableTables.filter(table => !selectedTables.includes(table));
   };
 
   const handleContinue = async () => {
-    console.log('Location state:', location.state);
-    console.log('All topics:', allTopics);
+    // Get GPT-selected columns
+    const gptData = getGptTablesAndColumns();
     
-    if (!allTopics) {
-      console.error('allTopics is undefined');
-      return;
-    }
+    // Create merged tables object
+    const mergedTables = {};
+    
+    // First add GPT-selected columns
+    Object.entries(gptData).forEach(([table, columns]) => {
+      mergedTables[table] = [...columns];
+    });
+    
+    // Then merge user-selected columns
+    dropdownRows.forEach(row => {
+      if (row.selectedTable && row.selectedColumns.length > 0) {
+        if (mergedTables[row.selectedTable]) {
+          // Add to existing table's columns
+          mergedTables[row.selectedTable] = [
+            ...mergedTables[row.selectedTable],
+            ...row.selectedColumns
+          ];
+        } else {
+          // Create new table entry
+          mergedTables[row.selectedTable] = [...row.selectedColumns];
+        }
+      }
+    });
 
-    // Prepare the data for submission
-    const selectedData = dropdownRows.map(row => ({
-      table: row.selectedTable,
-      columns: row.selectedColumns
-    }));
-
-    // Create the complete submission data
+    // Data for backend - ensure data matches Pydantic model
     const submissionData = {
-      // All topics data (as received from results page)
-      topics: allTopics.map(topic => ({
-        topic: topic.topic,
-        relationships: Array.from(topic.Relationship || []),
-        explanations: Array.from(topic.Explanation || []),
-        ml_models: Array.from(topic.ML_Models1 || []),
-        models_per_topic: Array.from(topic.ModelsPerTopic || [])
-      })),
-      
-      // Original tables and columns data
-      tables: tables,
-      columns_by_table: columnsByTable,
-      
-      // Additional data from backend
-      analyzed_articles: analyzedArticles,
-      scraped_articles: scrapedArticles,
-      relationships: relationships,
-      explanations: explanations,
-      models_per_topic: modelsPerTopic,
-      ml_models: mlModels,
-      
-      // User selections
-      selected_topic: topic.topic,
-      selected_tables_and_columns: selectedData
+      topic: topic.topic,
+      Relationship: Array.from(topic.Relationship || []),
+      ML_Models: Array.from(topic.ML_Models || []),
+      tables: mergedTables
     };
 
-    try {
-      const response = await fetch('http://localhost:5000/submit-data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(submissionData)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to submit data');
+    // Navigate to analysis page immediately
+    navigate('/analysis', { 
+      state: { 
+        topic: topic,
+        tables: mergedTables,
+        submissionData: submissionData // Pass the submission data to be used by AnalysisPage
       }
+    });
 
-      const result = await response.json();
-      
-      // Navigate to analysis page with both the original and new data
-      navigate('/analysis', { 
-        state: { 
-          topic,
-          selectedData,
-          analysisResult: result // If the backend returns any analysis results
-        }
-      });
-    } catch (error) {
+    // Start the submission in the background
+    fetch('http://localhost:5000/submit-data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(submissionData)
+    }).catch(error => {
       console.error('Error submitting data:', error);
-      // TODO: Add error handling UI
-    }
+    });
   };
 
   if (!topic) {
     return <div className="topic-details-page">No topic selected</div>;
   }
+
+  const availableTables = getAvailableTablesFromAll();
 
   return (
     <div className="topic-details-page">
@@ -154,21 +173,50 @@ const TopicDetailsPage = () => {
       
       <div className="topic-info">
         <div className="topic-info-section">
-          <span className="topic-label">Relationships:</span>
+          <span className="topic-label">Reasoning:</span>
+          <span className="topic-content">
+            {topic.reasoning}
+          </span>
+        </div>
+
+        <div className="topic-info-section">
+          <span className="topic-label">Needs:</span>
+          <span className="topic-content">
+            {topic.Needs}
+          </span>
+        </div>
+
+        <div className="topic-info-section">
+          <span className="topic-label">Relationship:</span>
           <span className="topic-content">
             {topic.Relationship && Array.from(topic.Relationship).join('. ')}
           </span>
         </div>
 
         <div className="topic-info-section">
-          <span className="topic-label">Explanations:</span>
+          <span className="topic-label">ML Models:</span>
           <span className="topic-content">
-            {topic.Explanation && Array.from(topic.Explanation).join('. ')}
+            {topic.ML_Models && Array.from(topic.ML_Models).join(', ')}
           </span>
         </div>
-      </div>
 
-      <h3 className="selection-title">Choose the tables you want to add to the model analysis</h3>
+        <div className="topic-info-section">
+          <span className="topic-label">GPT Selected Columns:</span>
+          <span className="topic-content">
+            {topic.GPT_Columns && topic.GPT_Columns.length > 0 ? (
+              Object.entries(topic.GPT_Columns[0][0]).map(([table, columns]) => (
+                <div key={table}>
+                  <strong>{table}:</strong> {columns.join(', ')}
+                </div>
+              ))
+            ) : (
+              'None'
+            )}
+          </span>
+        </div>
+        </div>
+
+      <h3 className="selection-title">Choose Additional Tables and Columns for Analysis</h3>
       <div className="selection-container">
         {dropdownRows.map((row, index) => (
           <div key={row.id} className="selection-row">
@@ -176,7 +224,7 @@ const TopicDetailsPage = () => {
               <button 
                 className="add-row-button"
                 onClick={handleAddRow}
-                disabled={dropdownRows.length >= tables.length}
+                disabled={dropdownRows.length >= availableTables.length}
               >
                 +
               </button>
@@ -191,7 +239,7 @@ const TopicDetailsPage = () => {
             )}
             <div className="selection-section">
               <div className="dropdown-group">
-                <label htmlFor={`table-select-${row.id}`}>Select Table:</label>
+                <label htmlFor={`table-select-${row.id}`}>Select Additional Table:</label>
                 <select 
                   id={`table-select-${row.id}`}
                   value={row.selectedTable}
@@ -205,7 +253,7 @@ const TopicDetailsPage = () => {
               </div>
 
               <div className="dropdown-group">
-                <label htmlFor={`column-select-${row.id}`}>Select Columns (Optional):</label>
+                <label htmlFor={`column-select-${row.id}`}>Select Additional Columns:</label>
                 <select 
                   id={`column-select-${row.id}`}
                   multiple 
@@ -216,11 +264,9 @@ const TopicDetailsPage = () => {
                   }}
                   disabled={!row.selectedTable}
                 >
-                  {row.selectedTable && columnsByTable && columnsByTable[row.selectedTable] && 
-                    columnsByTable[row.selectedTable].map((column, index) => (
-                      <option key={index} value={column}>{column}</option>
-                    ))
-                  }
+                  {row.selectedTable && getAvailableColumnsForTable(row.selectedTable).map((column, index) => (
+                    <option key={index} value={column}>{column}</option>
+                  ))}
                 </select>
                 <p className="column-hint">Hold Ctrl (Windows) or ⌘ (Mac) to select multiple columns</p>
                 {row.selectedColumns.length > 0 && (
@@ -246,4 +292,4 @@ const TopicDetailsPage = () => {
   );
 };
 
-export default TopicDetailsPage; 
+export default TopicDetailsPage;

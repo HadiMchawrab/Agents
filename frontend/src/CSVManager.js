@@ -76,40 +76,42 @@ const CSVManager = ({ onProcessComplete }) => {
         body: formData
       });
 
-      const result = await response.json();
+      const response_result = await response.json();
+      console.log('Backend response:', response_result);
 
       if (!response.ok) {
-        throw new Error(result.detail?.message || 'Failed to process files');
+        throw new Error(response_result.detail?.message || 'Failed to process files');
       }
-      const backendData = result.result;
-      const tablesText = backendData.tables;
-      const { tables, columnsByTable } = parseTables(tablesText);
+      const backendData = response_result.result;
+      console.log('Full backend response:', backendData);
+      console.log('Topics from backend:', backendData.topic);
+      console.log('ML Models from backend:', backendData.ML_Models1);
+      console.log('Models per topic:', backendData.ModelsPerTopic);
+      console.log('GPT Columns structure:', backendData.GPT_Columns);
 
-      if (!Array.isArray(backendData.analyzed_topics)) {
-        throw new Error("Invalid backend response: analyzed_topics is not an array.");
+      if (!Array.isArray(backendData.topic)) {
+        throw new Error("Invalid backend response: topic array is missing");
       }
 
       const transformedResult = {
-        topics: backendData.analyzed_topics.map((topicObj, index) => {
-          const topic = topicObj.topic;
+        topics: backendData.topic.map((topicName, index) => {
+          console.log('Processing topic:', topicName);
           return {
-            topic,
-            Relationship: new Set(backendData.Relationship?.[topic] || []),
-            Explanation: new Set(backendData.Explanation?.[topic] || []),
-            ML_Models1: new Set((backendData.ML_Models1?.[index]?.split(",") || []).map(m => m.trim())),
-            ModelsPerTopic: new Set((backendData.ModelsPerTopic?.[topic]?.split(",") || []).map(m => m.trim()))
+            topic: topicName,
+            reasoning: (backendData.analyzed_topics?.[index]?.reasoning || ""),
+            GPT_Columns: backendData.GPT_Columns?.[topicName] || [], // Keep the nested array structure
+            Needs: new Set(backendData.Needs?.[topicName] || []),
+            Relationship: new Set(backendData.Relationship?.[topicName] || []),
+            ML_Models: new Set([
+              ...(backendData.ML_Models1?.[index]?.split(",") || []).map(m => m.trim()),
+              ...(backendData.ModelsPerTopic?.[topicName]?.split(",") || []).map(m => m.trim())
+            ])
           };
         }),
-        tables,
-        columnsByTable,
-        analyzedArticles: backendData.AnalyzedArticles || {},
-        scrapedArticles: backendData.ScrapedArticles || {},
-        relationships: backendData.Relationship || {},
-        explanations: backendData.Explanation || {},
-        modelsPerTopic: backendData.ModelsPerTopic || {},
-        mlModels: backendData.ML_Models1 || []
+        tables: backendData.tables || []
       };
 
+      console.log('Transformed result:', transformedResult);
       onProcessComplete(transformedResult);
       
       navigate('/results');
@@ -171,4 +173,4 @@ const CSVManager = ({ onProcessComplete }) => {
   );
 };
 
-export default CSVManager; 
+export default CSVManager;

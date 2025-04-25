@@ -4,9 +4,9 @@ import os
 import json
 import traceback
 import logging
-from virtualgraph import run_graph
 from typing import List
-from api.routes import router
+from routes import router  # Updated import path since we're in the same directory
+
 
 # Configure minimal console-only logging
 logging.basicConfig(
@@ -29,4 +29,4 @@ app.include_router(router)
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=7000)
