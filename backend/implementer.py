@@ -107,20 +107,9 @@ def generate_analysis(state: State) -> State:
         logging.info(f"Generating analysis for {table_name} with columns: {adjusted_columns_str} and ML models: {ml_models_str}")
         input_messages= [SystemMessage(content = """
                                                 You will be generating python scripts to run on the data frame to generate the analysis and get visualization.
-                                                You must explicitly list **all Python packages** required to run the scripts, including but not limited to pandas, numpy, matplotlib, seaborn, and any other libraries you use. The environment is clean, so every dependency must be included.
                                                 I will then be sending the data you generated with the Data frames in a jupyter notebook to run the scripts and generate the analysis and get visualization.
                                                 The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 50 lines of code max
                                                 As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
-                                                IMPORTANT: 
-                                                When generating the Python scripts, always remember that **Matplotlib's built-in seaborn styles** are outdated and do not match current Seaborn styles. This causes warnings or errors.
-                                                To avoid this issue, **never use `plt.style.use('seaborn')`**. Instead, always use:
-                                                plt.style.use('seaborn-v0_8')
-                                                This ensures compatibility with the latest Matplotlib versions.
-                                                Alternatively, you can use Seaborn's own theme setup:
-                                                import seaborn as sns
-                                                sns.set_theme()
-                                                But **prefer `plt.style.use('seaborn-v0_8')`** when setting the style.
-                                                Always respect this rule in the generated scripts.
                                                 """), 
                      HumanMessage(content = f""""Return the response **only** in this strict JSON format, with no additional text or explanations:
                                  ```json
