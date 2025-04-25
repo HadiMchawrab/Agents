@@ -203,15 +203,11 @@ const TopicDetailsPage = () => {
         <div className="topic-info-section">
           <span className="topic-label">GPT Selected Columns:</span>
           <span className="topic-content">
-            {topic.GPT_Columns && topic.GPT_Columns.length > 0 ? (
-              Object.entries(topic.GPT_Columns[0][0]).map(([table, columns]) => (
-                <div key={table}>
-                  <strong>{table}:</strong> {columns.join(', ')}
-                </div>
-              ))
-            ) : (
-              'None'
-            )}
+            {topic.GPT_Columns && Object.entries(topic.GPT_Columns).map(([table, columns]) => (
+              <div key={table} className="gpt-columns-info">
+                <strong>{table}:</strong> {columns.join(', ')}
+              </div>
+            ))}
           </span>
         </div>
         </div>

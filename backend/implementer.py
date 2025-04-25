@@ -10,11 +10,13 @@ from typing import TypedDict
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from web_scraper.scraper import scrape
 import pandas as pd
 import json
 import logging
 from dotenv import load_dotenv
+import asyncio
 
 
 # Load environment variables
@@ -27,7 +29,7 @@ if not CLAUDE_API_KEY:
     raise ValueError("CLAUDE_API_KEY is not set. Please check your .env file.")
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY, max_tokens = 8192 )
-
+model_GPT  = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"), max_tokens = 4052)
 
 class State(TypedDict):
     tables: set  # set of dictionaries {'table1': ['col1', 'col2'], 'table2': ['col1', 'col2']}
@@ -44,6 +46,7 @@ class State(TypedDict):
     Reqs : set
     scripts: set # set of dictionaries of data frames and the scripts to run on them
     return_format: set
+    executed_notebook: set # the executed notebook after running the scripts on the data frames
 
 
 
@@ -104,18 +107,28 @@ def generate_analysis(state: State) -> State:
         logging.info(f"Generating analysis for {table_name} with columns: {adjusted_columns_str} and ML models: {ml_models_str}")
         input_messages= [SystemMessage(content = """
                                                 You will be generating python scripts to run on the data frame to generate the analysis and get visualization.
-                                                You will also need to generate the requirements to run the scripts.
+                                                You must explicitly list **all Python packages** required to run the scripts, including but not limited to pandas, numpy, matplotlib, seaborn, and any other libraries you use. The environment is clean, so every dependency must be included.
                                                 I will then be sending the data you generated with the Data frames in a jupyter notebook to run the scripts and generate the analysis and get visualization.
                                                 The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 50 lines of code max
                                                 As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
+                                                IMPORTANT: 
+                                                When generating the Python scripts, always remember that **Matplotlib's built-in seaborn styles** are outdated and do not match current Seaborn styles. This causes warnings or errors.
+                                                To avoid this issue, **never use `plt.style.use('seaborn')`**. Instead, always use:
+                                                plt.style.use('seaborn-v0_8')
+                                                This ensures compatibility with the latest Matplotlib versions.
+                                                Alternatively, you can use Seaborn's own theme setup:
+                                                import seaborn as sns
+                                                sns.set_theme()
+                                                But **prefer `plt.style.use('seaborn-v0_8')`** when setting the style.
+                                                Always respect this rule in the generated scripts.
                                                 """), 
-                     HumanMessage(content = """"Return the response **only** in this strict JSON format, with no additional text or explanations:
+                     HumanMessage(content = f""""Return the response **only** in this strict JSON format, with no additional text or explanations:
                                  ```json
-                                    {
+                                    {'{'}
                                         "Reqs": "All the requirements to be installed to run the below scripts",
-                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 50 lines of code max, which will be running in a single code cell)",
+                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 50 lines of code max, which will be running in a single code cell) and call the dataframe {table_name} and not df_{table_name}",
                                         "Return_Format": "The format of the return data, meaning how will you return "                                                                   
-                                    }
+                                    {'}'}
                                     ```"""),
                      HumanMessage(content = f"""The topic is: {state['topic']}"""),
                      HumanMessage(content = f"""The columns in this data frame are: {adjusted_columns_str}"""),
@@ -125,7 +138,7 @@ def generate_analysis(state: State) -> State:
 
         
         logging.info(f"Message Sent to AI")
-        ai_message = model.invoke(input_messages)
+        ai_message = model_GPT.invoke(input_messages)
         logging.info(ai_message.content)
         raw_content = ai_message.content.strip()
         logging.info(f"Claude raw response: {raw_content}")
@@ -153,7 +166,125 @@ def generate_analysis(state: State) -> State:
         
     return {'Analysis': ans, 'Reqs': Reqs, 'scripts': scripts, 'return_Format': return_format}
 
+import httpx
 
+async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
+    logger = logging.getLogger(__name__)
+    logger.info("Starting send_to_notebook function")
+    logger.debug(f"Received reqs keys: {list(reqs.keys())}")
+    logger.debug(f"Received scripts keys: {list(scripts.keys())}")
+    logger.debug(f"Received dataframes keys: {list(dfs.keys())}")
+
+    csvs = []
+    file_handles = []
+    try:
+        # Create csv_adjusted directory if it doesn't exist
+        os.makedirs("csv_adjusted", exist_ok=True)
+        logger.debug("Created csv_adjusted directory")
+        
+        files = []
+        # Convert DataFrames to CSV files and prepare files dict
+        for table_name, df in dfs.items():
+            logger.info(f"Processing table: {table_name}")
+            csv_file = f"csv_adjusted/{table_name}.csv"  # Include .csv extension
+            logger.debug(f"Saving DataFrame to {csv_file}")
+            
+            try:
+                df.to_csv(csv_file, index=False)
+                csvs.append(csv_file)
+                logger.debug(f"Successfully saved DataFrame to {csv_file}")
+            except Exception as e:
+                logger.error(f"Error saving DataFrame to CSV: {str(e)}")
+                raise
+            
+            try:
+                # Open file and create file handle
+                file_handle = open(csv_file, 'rb')
+                file_handles.append(file_handle)
+                # Add to files list in the correct format for httpx
+                files.append(('files', (f'file_{table_name}', file_handle, 'text/csv')))
+                logger.debug(f"Created file handle and added to files list for {table_name}")
+            except Exception as e:
+                logger.error(f"Error creating file handle: {str(e)}")
+                raise
+
+        # Prepare the data as JSON strings
+        try:
+            data = {
+                'reqs': (None, json.dumps(reqs)),
+                'scripts': (None, json.dumps(scripts))
+            }
+            logger.debug("Successfully prepared JSON data")
+        except Exception as e:
+            logger.error(f"Error preparing JSON data: {str(e)}")
+            raise
+        
+        # Use async context manager with increased timeouts
+        timeout_settings = httpx.Timeout(
+            timeout=600.0,  # 10 minutes for the entire operation
+            connect=60.0,   # 1 minute for connecting
+            read=600.0,     # 10 minutes for reading
+            write=60.0      # 1 minute for writing
+        )
+        
+        logger.info("Preparing to send request to notebook service")
+        async with httpx.AsyncClient(timeout=timeout_settings) as client:
+            try:
+                logger.debug(f"Sending POST request to notebook service with {len(files)} files")
+                response = await client.post(
+                    "http://localhost:7000/analyze-data",
+                    data=data,
+                    files=files
+                )
+                logger.debug(f"Received response with status code: {response.status_code}")
+                
+                if response.status_code == 422:
+                    logger.error(f"Validation error response: {response.text}")
+                    return {"error": f"Request validation failed: {response.text}"}
+                
+                response_json = response.json()
+                logger.info("Successfully received and parsed response from notebook service")
+                return response_json
+            except httpx.TimeoutException as e:
+                logger.error(f"Timeout error while sending data to notebook service: {str(e)}")
+                return {"error": "Request timed out while sending data to notebook service"}
+            except httpx.RequestError as e:
+                logger.error(f"Error sending request to notebook service: {str(e)}")
+                return {"error": f"Failed to send request to notebook service: {str(e)}"}
+            except Exception as e:
+                logger.error(f"Unexpected error while communicating with notebook service: {str(e)}", exc_info=True)
+                return {"error": f"Unexpected error: {str(e)}"}
+    
+    finally:
+        logger.debug("Starting cleanup process")
+        # Close all file handles
+        for handle in file_handles:
+            try:
+                handle.close()
+                logger.debug("Closed file handle")
+            except Exception as e:
+                logger.error(f"Error closing file handle: {str(e)}")
+        
+        # Clean up temporary CSV files after handles are closed
+        for csv_file in csvs:
+            try:
+                if os.path.exists(csv_file):
+                    os.remove(csv_file)
+                    logger.debug(f"Removed temporary file: {csv_file}")
+            except Exception as e:
+                logger.error(f"Error cleaning up {csv_file}: {str(e)}")
+
+def call_notebook_service(state: State) -> State:
+    """
+    Async node to call the notebook FastAPI service and return the executed notebook.
+    """
+    reqs = state.get("Reqs", {})
+    scripts = state.get("scripts", {})
+    dfs = state.get("data_frames", {})
+    
+    notebook_result = asyncio.run(send_to_notebook(reqs, scripts, dfs))
+    state["executed_notebook"] = notebook_result
+    return state
 
 # def generate_pictures(state: State) -> State:
 #     # state['data_frames'] is a set of data frames created from the tables
@@ -174,11 +305,13 @@ def generate_analysis(state: State) -> State:
 
 graph_builder.add_node(into_data_frames, "into_data_frames")
 graph_builder.add_node(generate_analysis, "generate_analysis")
+graph_builder.add_node(call_notebook_service, "call_notebook_service")
 
 graph_builder.add_edge("into_data_frames", "generate_analysis")
+graph_builder.add_edge("generate_analysis", "call_notebook_service")
 
 graph_builder.set_entry_point("into_data_frames")
-graph_builder.set_finish_point("generate_analysis")
+graph_builder.set_finish_point("call_notebook_service")
 
 graph2 = graph_builder.compile()
 
@@ -199,13 +332,13 @@ def test_graph2():
         'Pictures': {},
         'Pictures_Analysis': {},
         'Reqs': {},
-        'DF_Info': {}
+        'DF_Info': {},
+        'executed_notebook': {}
 
     }
 
     # Run the graph with the sample state
     final_state2 = graph2.invoke(initial_state)
-    print(final_state2)
     
     
 def run_graph2(data: dict) -> State:
