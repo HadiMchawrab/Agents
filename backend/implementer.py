@@ -45,7 +45,6 @@ class State(TypedDict):
     Pictures_Analysis: set
     Reqs : set
     scripts: set # set of dictionaries of data frames and the scripts to run on them
-    return_format: set
     executed_notebook: set # the executed notebook after running the scripts on the data frames
 
 
@@ -93,7 +92,6 @@ def generate_analysis(state: State) -> State:
     ans = {}
     Reqs = {}
     scripts = {}
-    return_format = {}
     
     # Extract table names from adjusted_columns dictionary
     table_names = list(state['adjusted_columns'].keys())
@@ -102,21 +100,21 @@ def generate_analysis(state: State) -> State:
     for table_name in table_names:
         # Generate analysis for each DataFrame using CLAUDE
         logging.info(f"Generating analysis for {table_name}")
-        adjusted_columns_str = str(state['adjusted_columns'])
+        adjusted_columns = state['adjusted_columns'][table_name]
+        adjusted_columns_str = str(adjusted_columns)
         ml_models_str = str(state['ML_Models'])
         logging.info(f"Generating analysis for {table_name} with columns: {adjusted_columns_str} and ML models: {ml_models_str}")
         input_messages= [SystemMessage(content = """
                                                 You will be generating python scripts to run on the data frame to generate the analysis and get visualization.
                                                 I will then be sending the data you generated with the Data frames in a jupyter notebook to run the scripts and generate the analysis and get visualization.
-                                                The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 50 lines of code max
+                                                The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 200 lines of code max
                                                 As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
                                                 """), 
                      HumanMessage(content = f""""Return the response **only** in this strict JSON format, with no additional text or explanations:
                                  ```json
                                     {'{'}
-                                        "Reqs": "All the requirements to be installed to run the below scripts",
-                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 50 lines of code max, which will be running in a single code cell) and call the dataframe {table_name} and not df_{table_name}",
-                                        "Return_Format": "The format of the return data, meaning how will you return "                                                                   
+                                        "Reqs": "All the requirements to be installed to run the below scripts seperated by a single space between each requirement, and the requirements should be in a single line",
+                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 50 lines of code max, which will be running in a single code cell) and call the dataframe {table_name} and not df_{table_name}.                                      IF you want to show the correlation table, you dont need columns that are strings, you should look at the columns that have type either int or float using this info {adjusted_columns_str}, and you can use the correlation table.                                        Also make use of other relationships between the columns and the ML models to generate the analysis and get visualizations,While taking into consideration the type of the data you are using in order not to get an error. Create a new folder in notebook_output and call it {table_name}. After creating each figure save it inside notebook_output/{table_name} and name it {table_name}_figure_1.png, {table_name}_figure_2.png, and so on. "
                                     {'}'}
                                     ```"""),
                      HumanMessage(content = f"""The topic is: {state['topic']}"""),
@@ -149,11 +147,9 @@ def generate_analysis(state: State) -> State:
             
         # Store results using string table_name as dictionary key
         Reqs[table_name] = parsed_json.get("Reqs", "No Reqs returned")
-        scripts[table_name] = parsed_json.get("Scripts", "No Scripts returned")
-        return_format[table_name] = parsed_json.get("Return_Format", "No Format returned")
+        scripts[table_name] = parsed_json.get("Scripts", "No Scripts returned")        
         
-        
-    return {'Analysis': ans, 'Reqs': Reqs, 'scripts': scripts, 'return_Format': return_format}
+    return {'Analysis': ans, 'Reqs': Reqs, 'scripts': scripts}
 
 import httpx
 
@@ -275,20 +271,6 @@ def call_notebook_service(state: State) -> State:
     state["executed_notebook"] = notebook_result
     return state
 
-# def generate_pictures(state: State) -> State:
-#     # state['data_frames'] is a set of data frames created from the tables
-#     # we now also have the python scripts to run on the data frames
-#     # hence for each data frame, we do the following:
-#     # we run the python scripts on the data frames to generate the pictures and save them in the state
-
-# def analyze(state: State) -> State:
-#     # state['data_frames'] is a set of data frames created from the tables
-#     # we now also have the set of pictures for each of the topics
-#     # hence for each data frame, we do the following:
-#     # we run the python scripts on the data frames to generate the analysis and save them in the state
-
-
-# # def 
 
 
 
@@ -316,7 +298,6 @@ def test_graph2():
         'Relationship': "The ML models (SVM, RNN, Bayesian Networks) are well-suited for credit risk assessment using the available data. SVM can classify customers into risk categories based on financial attributes, RNNs can analyze sequential patterns in financial data to predict defaults, and Bayesian Networks can model probabilistic relationships between financial indicators and credit risk outcomes.",
         'ML_Models': ["Support Vector Machines (SVM)", "Recurrent Neural Networks (RNN)", "Bayesian Networks","Logistic Regression", "Random Forest", "Gradient Boosting", "Neural Networks"],
         'scripts': {}, # set of dictionaries of data frames and the scripts to run on them
-        'return_format': {}, # set of dictionaries of data frames and the return format to run on them 
         'Analysis': {},
         'Pictures': {},
         'Pictures_Analysis': {},
@@ -354,6 +335,7 @@ def run_graph2(data: dict) -> State:
     
     print(initial_state)
     final_state2 = graph2.invoke(initial_state)
+    print(final_state2)
     
     return {
         'tables': final_state2.get('tables', []),

@@ -240,10 +240,10 @@ os.makedirs('notebook_output', exist_ok=True)""")
                 with open(executed_notebook_filename) as f:
                     executed_nb = f.read()
                 
-                return {
-                    "executed_notebook": executed_nb,
-                    "figures": [os.path.join(output_dir, f) for f in figures]
-                }
+                # return {
+                #     "executed_notebook": executed_nb,
+                #     "figures": [os.path.join(output_dir, f) for f in figures]
+                # }
 
             except Exception as e:
                 logger.error(f"Error during notebook execution: {str(e)}", exc_info=True)
@@ -255,21 +255,21 @@ os.makedirs('notebook_output', exist_ok=True)""")
         logger.error(f"Unexpected error in data analysis: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
         
-    finally:
-        # Don't clean up the output directory since we need the figures
-        # But clean up temporary files
-        logger.debug("Starting cleanup of temporary files")
-        for file in temp_files:
-            try:
-                if os.path.exists(file):
-                    os.remove(file)
-                    logger.debug(f"Cleaned up file: {file}")
-            except Exception as e:
-                logger.error(f"Error cleaning up {file}: {str(e)}")
-        # Clean up temp directory
-        try:
-            if os.path.exists("temp_csv"):
-                os.rmdir("temp_csv")
-                logger.debug("Cleaned up temp_csv directory")
-        except Exception as e:
-            logger.error(f"Error cleaning up temp_csv directory: {str(e)}")
+    # finally:
+    #     # Don't clean up the output directory since we need the figures
+    #     # But clean up temporary files
+    #     logger.debug("Starting cleanup of temporary files")
+    #     for file in temp_files:
+    #         try:
+    #             if os.path.exists(file):
+    #                 os.remove(file)
+    #                 logger.debug(f"Cleaned up file: {file}")
+    #         except Exception as e:
+    #             logger.error(f"Error cleaning up {file}: {str(e)}")
+    #     # Clean up temp directory
+    #     try:
+    #         if os.path.exists("temp_csv"):
+    #             os.rmdir("temp_csv")
+    #             logger.debug("Cleaned up temp_csv directory")
+    #     except Exception as e:
+    #         logger.error(f"Error cleaning up temp_csv directory: {str(e)}")
