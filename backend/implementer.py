@@ -110,11 +110,24 @@ def generate_analysis(state: State) -> State:
                                                 The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 200 lines of code max
                                                 As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
                                                 """), 
-                     HumanMessage(content = f""""Return the response **only** in this strict JSON format, with no additional text or explanations:
+                     HumanMessage(content = f"""Return the response **only** in this strict JSON format, with no additional text or explanations:
                                  ```json
                                     {'{'}
                                         "Reqs": "All the requirements to be installed to run the below scripts seperated by a single space between each requirement, and the requirements should be in a single line",
-                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 50 lines of code max, which will be running in a single code cell) and call the dataframe {table_name} and not df_{table_name}.                                      IF you want to show the correlation table, you dont need columns that are strings, you should look at the columns that have type either int or float using this info {adjusted_columns_str}, and you can use the correlation table.                                        Also make use of other relationships between the columns and the ML models to generate the analysis and get visualizations,While taking into consideration the type of the data you are using in order not to get an error. Create a new folder in notebook_output and call it {table_name}. After creating each figure save it inside notebook_output/{table_name} and name it {table_name}_figure_1.png, {table_name}_figure_2.png, and so on. "
+                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 200 lines of code max, which will be running in a single code cell) and call the dataframe "{table_name}", exactly as it is. 
+
+                                        IF you want to show the correlation table, you dont need columns that are strings, you should look at the columns that have type either int or float using this info {adjusted_columns_str}, and you can use the correlation table.                                        
+                                        Also make use of other relationships between the columns and the ML models to generate the analysis and get visualizations, while taking into consideration the type of the data you are using in order not to get an error. 
+
+                                        Now the path that you will be saving the pictures in is 'notebook_output/{table_name}/' and the name of the picture should be '{table_name}_figure_1.png' and so on, and the path should be relative to the notebook that will be running the scripts.
+                                        
+
+                                        Rules: 
+                                        Inside your working directory which is notebook_output, 
+                                        You need to create a subdirectory for this table name = {table_name} in the notebook_output directory, and save the pictures in it. 
+                                        Example of the path: notebook_output/{table_name}/{table_name}_figure_1.png
+                                                             notebook_output/{table_name}/{table_name}_figure_2.png
+                                        And so on. "
                                     {'}'}
                                     ```"""),
                      HumanMessage(content = f"""The topic is: {state['topic']}"""),
