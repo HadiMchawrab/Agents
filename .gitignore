@@ -19,7 +19,6 @@ backend/temp.db
 
 web_scraper/
 
-.env
 venv/
 
 test.py
@@ -40,3 +39,8 @@ backend/csv_adjusted/
 backend/graph_results/
 backend/graph2_results/
 
+/.env
+
+notebook/notebook_output/
+notebook/executed_notebook.ipynb
+notebook/temp_notebook.ipynb
