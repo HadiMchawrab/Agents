@@ -1,42 +1,42 @@
 {
     "tables": [
         {
-            "Electric_Vehicle_Population_Data": [
-                "Vehicle Location",
-                "Postal Code",
-                "County",
-                "City",
-                "Electric Range",
-                "Electric Vehicle Type",
-                "Electric Utility"
+            "data": [
+                "Bankrupt?",
+                "ROA(C) before interest and depreciation before interest",
+                "Total debt/Total net worth",
+                "Debt ratio %",
+                "Cash Flow to Liability",
+                "Net Income to Total Assets",
+                "Liability to Equity"
             ]
         }
     ],
     "adjusted_columns": {
-        "Electric_Vehicle_Population_Data": [
-            "Vehicle Location:object",
-            "Postal Code:float64",
-            "County:object",
-            "City:object",
-            "Electric Range:float64",
-            "Electric Vehicle Type:object",
-            "Electric Utility:object"
+        "data": [
+            "Bankrupt?:int64"
         ]
     },
     "csv_files": [
-        "csv_test/Electric_Vehicle_Population_Data.csv"
+        "csv_test/banking.csv",
+        "csv_test/data.csv"
     ],
-    "topic": "Machine learning models employed in charging infrastructure planning",
+    "topic": "Machine learning models employed in bankruptcy prediction",
     "Relationship": [
-        "The ML models (spatial clustering, demand forecasting, and location optimization) directly relate to the Electric_Vehicle_Population_Data table by using geographic and vehicle-specific information to optimize charging infrastructure placement. The models analyze spatial distribution of EVs, predict future charging needs, and determine optimal charging station locations based on existing EV population data."
+        "The bankruptcy prediction models (XGBoost, SVM, Borderline-SVM SMOTE) directly align with the 'data' table which contains the 'Bankrupt?' target variable and numerous financial indicators that serve as predictive features. These models can analyze the complex relationships between financial ratios, profitability metrics, and leverage indicators to predict company bankruptcy risk."
     ],
     "ML_Models": [
-        "Spatial clustering algorithms",
-        "Demand forecasting models",
-        "Location optimization algorithms",
-        "Stacked Ensemble Learning Model",
-        "Bayesian Network",
-        "Random Forest with Kernel Density Estimation"
+        "Random Forest",
+        "Gradient Boosting",
+        "Neural Networks",
+        "Logistic Regression",
+        "XGBoost",
+        "Support Vector Machines (SVM)",
+        "Borderline-SVM SMOTE"
     ],
-    "Analysis": {}
+    "Analysis": {},
+    "DF_Info": {},
+    "Pictures": {},
+    "Pictures_Analysis": {},
+    "images_bytes": {}
 }

@@ -67,103 +67,103 @@ def convert_numpy_types(obj):
     else:
         return obj
 
-@router.post("/upload-and-process")
-async def test_frontend():
-    RETURN_FILE = os.path.join(os.path.dirname(__file__), "return2.json")
+# @router.post("/upload-and-process")
+# async def test_frontend():
+#     RETURN_FILE = os.path.join(os.path.dirname(__file__), "return2.json")
 
-    with open(RETURN_FILE, "r", encoding="utf-8") as file:
-        return_text = json.load(file)
+#     with open(RETURN_FILE, "r", encoding="utf-8") as file:
+#         return_text = json.load(file)
         
-    return return_text
+#     return return_text
  
 
-# @router.post("/upload-and-process")
-# async def upload_and_process(request: Request, files: List[UploadFile] = File(...)):
-#     try:
+@router.post("/upload-and-process")
+async def upload_and_process(request: Request, files: List[UploadFile] = File(...)):
+    try:
         
-#         logger.debug("Received upload request")
+        logger.debug("Received upload request")
         
-#         form = await request.form()
-#         descriptions = {}
+        form = await request.form()
+        descriptions = {}
 
-#         for key, value in form.items():
-#             if key.startswith("descriptions["):
-#                 filename = key[len("descriptions["):-1]
-#                 descriptions[filename] = value
-#         print(descriptions)
+        for key, value in form.items():
+            if key.startswith("descriptions["):
+                filename = key[len("descriptions["):-1]
+                descriptions[filename] = value
+        print(descriptions)
         
-#         if not files:
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail="No files were uploaded"
-#             )
+        if not files:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No files were uploaded"
+            )
         
-#         csv_files = []
+        csv_files = []
         
-#         for file in files:
-#             if not file.filename.endswith('.csv'):
-#                 raise HTTPException(
-#                     status_code=status.HTTP_400_BAD_REQUEST,
-#                     detail=f"File {file.filename} is not a CSV file"
-#                 )
+        for file in files:
+            if not file.filename.endswith('.csv'):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File {file.filename} is not a CSV file"
+                )
                 
-#             file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-#             logger.debug(f"Saving file to {file_path}")
+            file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+            logger.debug(f"Saving file to {file_path}")
             
-#             try:
-#                 with open(file_path, "wb") as buffer:
-#                     content = await file.read()
-#                     buffer.write(content)
-#                 csv_files.append(file_path)
-#             except Exception as e:
-#                 logger.error(f"Error saving file {file.filename}: {str(e)}")
-#                 raise HTTPException(
-#                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                     detail=f"Error saving file {file.filename}"
-#                 )
+            try:
+                with open(file_path, "wb") as buffer:
+                    content = await file.read()
+                    buffer.write(content)
+                csv_files.append(file_path)
+            except Exception as e:
+                logger.error(f"Error saving file {file.filename}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error saving file {file.filename}"
+                )
 
-#         try:
-#             logger.debug("Starting graph execution")
-#             result = run_graph(csv_files, descriptions)
-#             logger.debug("Graph execution completed")
+        try:
+            logger.debug("Starting graph execution")
+            result = run_graph(csv_files, descriptions)
+            logger.debug("Graph execution completed")
             
-#             # Save the result to a JSON file
-#             output_dir = "graph_results"
-#             os.makedirs(output_dir, exist_ok=True)
-#             full_path = os.path.join(output_dir, "graph_results.json")
+            # Save the result to a JSON file
+            output_dir = "graph_results"
+            os.makedirs(output_dir, exist_ok=True)
+            full_path = os.path.join(output_dir, "graph_results.json")
             
-#             with open(full_path, "w", encoding="utf-8") as f:
-#                 json.dump(convert_sets(result), f, indent=4, ensure_ascii=False)
+            with open(full_path, "w", encoding="utf-8") as f:
+                json.dump(convert_sets(result), f, indent=4, ensure_ascii=False)
             
-#             logger.info(f"Graph results saved to {full_path}")
+            logger.info(f"Graph results saved to {full_path}")
 
-#             return {
-#                 'status': 'success',
-#                 'message': 'Files processed successfully',
-#                 'result': convert_sets(result)
-#             }
+            return {
+                'status': 'success',
+                'message': 'Files processed successfully',
+                'result': convert_sets(result)
+            }
 
-#         except Exception as e:
-#             logger.error(f"Error processing request: {str(e)}")
-#             logger.error(f"Traceback: {traceback.format_exc()}")
-#             raise HTTPException(
-#                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                 detail={
-#                     'status': 'error',
-#                     'message': str(e),
-#                     'traceback': traceback.format_exc()
-#                 }
-#             )
+        except Exception as e:
+            logger.error(f"Error processing request: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    'status': 'error',
+                    'message': str(e),
+                    'traceback': traceback.format_exc()
+                }
+            )
 
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         logger.error(f"Unexpected error: {str(e)}")
-#         logger.error(f"Traceback: {traceback.format_exc()}")
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail="An unexpected error occurred"
-#         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred"
+        )
 
 
     

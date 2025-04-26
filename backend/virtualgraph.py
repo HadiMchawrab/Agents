@@ -40,6 +40,7 @@ class State(TypedDict):
     ModelsPerTopic: set
     ML_Models1: set
     GPT_Columns: set
+    AdjustedColumns: set
 
     
 
@@ -52,6 +53,7 @@ graph_builder = StateGraph(State)
 def get_table_columns(state: dict, db_name: str = 'temp.db') -> dict:
     conn = sqlite3.connect(db_name)
     results = []
+    adjusted_columns = {}
     try:
         for csv_file in state.get("csv_files", []):
             if not os.path.exists(csv_file):
@@ -61,6 +63,11 @@ def get_table_columns(state: dict, db_name: str = 'temp.db') -> dict:
             df.to_sql(table_name, conn, if_exists='replace', index=False)
             columns = pd.read_sql_query(f"PRAGMA table_info({table_name})", conn)['name'].tolist()
             results.append({table_name: columns})
+            column_dtypes = []
+            for col in columns:
+                dtype_str = str(df[col].dtype)
+                column_dtypes.append(f"{col}:{dtype_str}")
+            adjusted_columns[table_name] = column_dtypes
     except Exception as e:
         logging.error(f"Error processing CSV files: {str(e)}")
         raise e
@@ -68,7 +75,7 @@ def get_table_columns(state: dict, db_name: str = 'temp.db') -> dict:
         conn.close()
     
     # Return a dictionary with 'tables' as the key
-    return {"tables": results}
+    return {"tables": results, "adjusted_columns": adjusted_columns}
 
 
 
@@ -304,7 +311,8 @@ def run_graph(csv_files: List[str], descriptions: Dict[str, str] = None) -> Stat
         "Relationship": {},
         "GPT_Columns": {},
         "ML_Models1": {},
-        "Needs": {}
+        "Needs": {},
+        "AdjustedColumns": {}
     }
     
     # Run the graph
@@ -326,6 +334,8 @@ def run_graph(csv_files: List[str], descriptions: Dict[str, str] = None) -> Stat
     print(final_state["GPT_Columns"])
     print("\n Needs:")
     print(final_state["Needs"])
+    print("\n Adjusted Columns:")
+    print(final_state["AdjustedColumns"])
     
     return final_state
 

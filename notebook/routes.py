@@ -41,8 +41,17 @@ class AnalysisRequest(BaseModel):
     reqs: str
     scripts: str
 
+def encode_image_to_base64(image_path):
+    try:
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            return encoded_string
+    except Exception as e:
+        logger.error(f"Error encoding image {image_path}: {str(e)}")
+        return None
+
 @router.post("/analyze-data")
-async def data_analysis(
+def data_analysis(
     reqs: str = Form(...),
     scripts: str = Form(...),
     files: List[UploadFile] = File(default=...)
@@ -93,7 +102,7 @@ async def data_analysis(
                 logger.debug(f"Extracted table name: {table_name} from filename: {file.filename}")
             
             try:
-                contents = await file.read()
+                contents = file.file.read()
                 logger.debug(f"Successfully read contents of file: {file.filename}")
             except Exception as e:
                 logger.error(f"Error reading file {file.filename}: {str(e)}")
@@ -197,8 +206,6 @@ os.makedirs('notebook_output', exist_ok=True)""")
             # Execute the notebook using synchronous subprocess
             logger.info("Executing notebook")
             try:
-                import subprocess
-                
                 cmd = [
                     'jupyter', 'nbconvert', 
                     '--to', 'notebook',
@@ -232,26 +239,6 @@ os.makedirs('notebook_output', exist_ok=True)""")
                 temp_files.append(executed_notebook_filename)
                 logger.info("Notebook execution completed successfully")
 
-                # Get list of generated figures and encode them
-                figures_data = []
-                if os.path.exists(output_dir):
-                    for f in os.listdir(output_dir):
-                        if f.endswith(('.png', '.jpg', '.pdf')):
-                            file_path = os.path.join(output_dir, f)
-                            try:
-                                with open(file_path, 'rb') as img_file:
-                                    encoded_image = base64.b64encode(img_file.read()).decode('utf-8')
-                                    figures_data.append({
-                                        'filename': f,
-                                        'data': encoded_image,
-                                        'type': f.split('.')[-1]  # Get file extension
-                                    })
-                            except Exception as e:
-                                logger.error(f"Error reading image file {f}: {str(e)}")
-                                continue
-                
-                logger.debug(f"Processed {len(figures_data)} figures")
-
                 logger.debug(f"Reading executed notebook: {executed_notebook_filename}")
                 with open(executed_notebook_filename) as f:
                     executed_nb = f.read()
@@ -259,35 +246,46 @@ os.makedirs('notebook_output', exist_ok=True)""")
                 # Collect results per table
                 results[tablename] = {
                     "executed_notebook": executed_nb,
-                    "figures": figures_data
                 }
 
-
+            except subprocess.TimeoutExpired:
+                logger.error("Notebook execution timed out")
+                raise HTTPException(status_code=504, detail="Notebook execution timed out")
             except Exception as e:
                 logger.error(f"Error during notebook execution: {str(e)}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"Error during notebook execution: {str(e)}")
-            
-        return results
-    
-    except Exception as e:
-        logger.error(f"Unexpected error in data analysis: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
         
-    # finally:
-    #     # Don't clean up the output directory since we need the figures
-    #     # But clean up temporary files
-    #     logger.debug("Starting cleanup of temporary files")
-    #     for file in temp_files:
-    #         try:
-    #             if os.path.exists(file):
-    #                 os.remove(file)
-    #                 logger.debug(f"Cleaned up file: {file}")
-    #         except Exception as e:
-    #             logger.error(f"Error cleaning up {file}: {str(e)}")
-    #     # Clean up temp directory
-    #     try:
-    #         if os.path.exists("temp_csv"):
-    #             os.rmdir("temp_csv")
-    #             logger.debug("Cleaned up temp_csv directory")
-    #     except Exception as e:
-    #         logger.error(f"Error cleaning up temp_csv directory: {str(e)}")
+        encoded_images = {}
+        for tablename in dfs.keys():
+            table_dir = 'notebook_output/' + tablename + '/'
+            if os.path.exists(table_dir):
+                # Get all image files in the directory
+                image_files = [f for f in os.listdir(table_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+                
+                # Encode each image
+                table_images = {}
+                for img_file in image_files:
+                    img_path = os.path.join(table_dir, img_file)
+                    encoded_img = encode_image_to_base64(img_path)
+                    if encoded_img:
+                        table_images[img_file] = encoded_img
+                
+                if table_images:
+                    encoded_images[tablename] = table_images
+    
+    finally:
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                    logger.debug(f"Cleaned up temporary file: {temp_file}")
+            except Exception as e:
+                logger.error(f"Error cleaning up {temp_file}: {str(e)}")
+    
+    # Return both the notebook execution results and encoded images
+    logger.info("Returning analysis results")
+    return {
+        "results": results,
+        "images": encoded_images
+    }

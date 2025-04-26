@@ -27,6 +27,7 @@ app.add_middleware(
 )
 app.include_router(router)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    # Listen on all interfaces (0.0.0.0) inside the container
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=7000)

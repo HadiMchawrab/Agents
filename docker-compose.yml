@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   frontend:
     build: 
@@ -15,6 +13,8 @@ services:
       - VITE_API_URL=http://backend:5000
     depends_on:
       - backend
+    networks:
+      - app-network
 
   backend:
     build: 
@@ -32,6 +32,8 @@ services:
     depends_on:
       - selenium
       - notebook
+    networks:
+      - app-network
     
   selenium:
     image: selenium/standalone-chrome:latest
@@ -41,9 +43,19 @@ services:
     environment:
       - SE_NODE_SESSION_TIMEOUT=180
       - SE_NODE_MAX_SESSIONS=5
+    networks:
+      - app-network
 
   notebook:
     build: ./notebook
+    ports:
+      - "7000:7000"
     volumes:
       - ./notebook:/backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 

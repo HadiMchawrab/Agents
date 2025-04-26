@@ -6,6 +6,7 @@ import ResultsPage from './ResultsPage';
 import TopicDetailsPage from './TopicDetailsPage';
 import HelpPage from './HelpPage';
 import AnalysisPage from './AnalysisPage';
+import DataAnalysisPage from './DataAnalysisPage';
 import './CSVManager.css';
 
 function App() {
@@ -73,6 +74,10 @@ function App() {
             <Route 
               path="/analysis" 
               element={<AnalysisPage />} 
+            />
+            <Route 
+              path="/data-analysis" 
+              element={<DataAnalysisPage />} 
             />
           </Routes>
         </main>

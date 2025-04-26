@@ -34,6 +34,15 @@ const AnalysisPage = () => {
         const data = await response.json();
         setAnalysisResult(data);
         setIsLoading(false);
+
+        // Navigate to data analysis page with the results including images_bytes
+        navigate('/data-analysis', { 
+          state: { 
+            analysisResult: data,
+            tables,
+            images_bytes: data.images_bytes 
+          } 
+        });
       } catch (err) {
         setError(err.message);
         setIsLoading(false);
@@ -41,7 +50,7 @@ const AnalysisPage = () => {
     };
 
     pollForResults();
-  }, [submissionData]);
+  }, [submissionData, navigate, tables]);
 
   if (!topic || !tables) {
     return <div className="analysis-page">No data available for analysis</div>;

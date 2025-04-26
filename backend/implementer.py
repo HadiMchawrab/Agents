@@ -1,7 +1,7 @@
 import sys
 import os
 from pathlib import Path
-
+import base64
 # Add the project root to the Python path
 project_root = str(Path(__file__).parent.parent)
 sys.path.append(project_root)
@@ -46,6 +46,15 @@ class State(TypedDict):
     Reqs : set
     scripts: set # set of dictionaries of data frames and the scripts to run on them
     executed_notebook: set # the executed notebook after running the scripts on the data frames
+    chosen_models : set # the chosen models after running the analysis on the images
+    explained_models : set
+    Last_Analysis: str # the analysis of the last model and the last data frame after running the analysis on the images
+    Last_Model: str # the last model after running the analysis on the images
+    Last_DF: str # the last data frame after running the analysis on the images
+    FinalReqs: set # the final requirements after running the training scripts on the data frames
+    FinalScripts: set # the final scripts after running the training scripts on the data frames
+
+
 
 
 
@@ -110,11 +119,14 @@ def generate_analysis(state: State) -> State:
                                                 The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 200 lines of code max
                                                 As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
                                                 """), 
-                     HumanMessage(content = f"""Return the response **only** in this strict JSON format, with no additional text or explanations:
-                                 ```json
+                     HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:
+                                ``` json
                                     {'{'}
                                         "Reqs": "All the requirements to be installed to run the below scripts seperated by a single space between each requirement, and the requirements should be in a single line",
-                                        "Scripts": "The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 200 lines of code max, which will be running in a single code cell) and call the dataframe "{table_name}", exactly as it is. 
+                                        "Scripts": "You will continue working assuming that there is pandas dataframe called {table_name} which is defined to have these columns {adjusted_columns_str}. 
+                                        You shouldn't re-write the before lines continue from there. 
+                                        Your goal: generate a full working code, knowing that you need to generate images and analysis and give a set of visualizations of this current dataframe (which is given, so you shouldn't write it in your code, assume you have a dataframe called {table_name} ) we need to make analysis of the data to understand more how we can use ML models to tackle this topic {state['topic']}. Your goal is not to write an ML algorithm but just to provided illustraiotns analysis, distributions, heatmpas, boxplots, correlation table ... on the dataframe called: {table_name}.
+                                        The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 200 lines of code max, which will be running in a single code cell) and call the dataframe "{table_name}", exactly as it is. 
 
                                         IF you want to show the correlation table, you dont need columns that are strings, you should look at the columns that have type either int or float using this info {adjusted_columns_str}, and you can use the correlation table.                                        
                                         Also make use of other relationships between the columns and the ML models to generate the analysis and get visualizations, while taking into consideration the type of the data you are using in order not to get an error. 
@@ -128,8 +140,9 @@ def generate_analysis(state: State) -> State:
                                         Example of the path: {table_name}/{table_name}_figure_1.png
                                                              {table_name}/{table_name}_figure_2.png
                                         And so on. "
-                                    {'}'}```
-                                    YOU NEED TO RETURN THE JSON RESPONSE ONLY, STARTING with ```json and ending with ```, so I can parse it easily
+                                    {'}'}
+                                    ```
+                                    YOU NEED TO RETURN THE JSON RESPONSE ONLY, STARTING with json and ending with , so I can parse it easily
                                     """),
                      HumanMessage(content = f"""The topic is: {state['topic']}"""),
                      HumanMessage(content = f"""The columns in this data frame are: {adjusted_columns_str}"""),
@@ -174,6 +187,10 @@ async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
     logger.debug(f"Received scripts keys: {list(scripts.keys())}")
     logger.debug(f"Received dataframes keys: {list(dfs.keys())}")
 
+    # Since we're running in Docker and the services are in the same network,
+    # we can use localhost because the backend container has its own network namespace
+    notebook_url = 'http://localhost:7000'
+    
     csvs = []
     file_handles = []
     try:
@@ -231,7 +248,7 @@ async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
             try:
                 logger.debug(f"Sending POST request to notebook service with {len(files)} files")
                 response = await client.post(
-                    "http://localhost:7000/analyze-data",
+                    notebook_url + "/analyze-data",
                     data=data,
                     files=files
                 )
@@ -286,17 +303,205 @@ def call_notebook_service(state: State) -> State:
     return state
 
 
+def analyze_images(state: State) -> State:
+    ml_mod = {}
+    model_analysis = {}
+    Last_Analysis = str
+    Last_Model = str
+    Last_DF = str
+
+    pictures = state['executed_notebook']['images']
+
+    # pictures = {
+    #     "banking": [
+    #         "notebook_output/banking/banking_figure_1.png",
+    #         "notebook_output/banking/banking_figure_2.png",
+    #         "notebook_output/banking/banking_figure_3.png",
+    #         "notebook_output/banking/banking_figure_4.png",
+    #         "notebook_output/banking/banking_figure_5.png",
+    #     ],
+    #     "data": [
+    #         "notebook_output/data/data_figure_1.png",
+    #         "notebook_output/data/data_figure_2.png",
+    #         "notebook_output/data/data_figure_3.png",
+    #         "notebook_output/data/data_figure_4.png",
+    #         "notebook_output/data/data_figure_5.png",
+    #         "notebook_output/data/data_figure_6.png",
+    #         "notebook_output/data/data_figure_7.png",
+    #         "notebook_output/data/data_figure_8.png",
+    #         "notebook_output/data/data_figure_9.png",
+    #     ],
+    # }
+
+    state["Pictures_Analysis"] = {}
+    for table, paths in pictures.items():
+        image_messages = []
+        for png_path in paths:
+            with open(png_path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            image_messages.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{b64}"}
+            })
+
+        # 2) Compose the chat messages
+        messages = [
+            SystemMessage(content=(
+                "You are an expert data scientist. "
+                "Analyze the set of exploratory plots provided and extract key insights "
+                "about data distribution, feature relationships, and any anomalies. "
+                "Then recommend the single best ML model for this dataset."
+            )),
+            HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:     
+                        ```json
+                                    {'{'}
+                                        "RecommendedModel": "one of the set of ML models: {state['ML_Models']}, and the model should be in a single line",
+                                        "Insights": "Why we chose this model based on the analysis of the images",
+                                        
+                                    {'}'}```"""),
+            HumanMessage(content=image_messages)
+        ]
+
+        logging.info(f"Message Sent to AI")
+        ai_message = model_GPT.invoke(messages)
+        logging.info(ai_message.content)
+        raw_content = ai_message.content.strip()
+        logging.info(f"Claude raw response: {raw_content}")
+
+        json_text = None
+        if raw_content.startswith("json"):
+            start_index = raw_content.find("json") + len("json")
+            end_index = raw_content.find("", start_index)
+            json_text = raw_content[start_index:end_index].strip()
+        elif raw_content.startswith(""):
+            json_text = raw_content.strip("").strip()
+        else:
+            json_text = raw_content  # Try parsing whatever we get
+        try:
+            parsed_json = json.loads(json_text[7:-3])
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse Claude response:\n{json_text}")
+            raise ValueError("Claude's response was not valid JSON.") from e
+
+        ml_mod[table] = parsed_json.get("RecommendedModel", "No Insights returned")
+        model_analysis[table] = parsed_json.get("Insights", "No Model returned")
+    logging.info(f"Model Analysis: {model_analysis}")
+    logging.info(f"ML Models: {ml_mod}")
+    stringified_models_analysis = str(state['explained_models'])
+    stringified_models = str(state['chosen_models'])
+
+    messages = [
+    SystemMessage(content=f"""(
+        "You are an expert data scientist. "
+        "Analyze the dataframes within the variables given the explanation {stringified_models_analysis}on why each ML model is being used in each dataframe"
+        "From these inferences, check which is the most understandable in why we chose the model  "
+        "Then recommend the single best data frame and its compatible ML model."
+    )"""),
+    HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:     
+                ```json
+                            {'{'}
+                                "Last_DF": "one of the set of tables models: {state['tables']}",
+                                "Last_Model":"model from {stringified_models} should be in a single line",
+                                "Last_Analysis": "the analysis of the last model and the last data frame",
+                                
+                            {'}'}```""")
+        ]
+
+    logging.info(f"Message Sent to AI")
+    ai_message2 = model_GPT.invoke(messages)
+    logging.info(ai_message2.content)
+    raw_content2 = ai_message2.content.strip()
+    logging.info(f"Claude raw response: {raw_content2}")
+
+    json_text = None
+    if raw_content2.startswith("json"):
+        start_index = raw_content2.find("json") + len("json")
+        end_index = raw_content2.find("", start_index)
+        json_text = raw_content2[start_index:end_index].strip()
+    elif raw_content2.startswith(""):
+        json_text = raw_content2.strip("").strip()
+    else:
+        json_text = raw_content2  # Try parsing whatever we get
+    try:
+        parsed_json2 = json.loads(json_text[7:-3])
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to parse Claude response:\n{json_text}")
+        raise ValueError("Claude's response was not valid JSON.") from e
+
+    Last_DF = parsed_json2.get("Last_DF", "No Last DF returned")
+    Last_Model = parsed_json2.get("Last_Model", "No Last Model returned")
+    Last_Analysis = parsed_json2.get("Last_Analysis", "No Last Analysis returned")
+
+
+
+    return {'chosen_models': Last_Model, 'explained_models': Last_Analysis, 'Last_DF': Last_DF}
+
+
+
+
+
+
+def generate_train(state: State) -> State:
+    stringified_analysis = str(state['Analysis'])
+    stringified_model = str(state['chosen_models'])
+
+    messages = [
+    SystemMessage(content=("You are an expert data scientist. "
+        "Given the ML model to use and the analysis and the data frame, generate a python script that would train the model on the data frame."
+       
+    )),
+    HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:     
+                ```json
+                            {'{'},
+                                "LRequiremenets": "All the requirements to be installed to run the below scripts seperated by a single space between each requirement, and the requirements should be in a single line",
+                                "LScripts": "Generate a full python text, which would run the dataframe {state['Last_DF']} and train the model {stringified_model} on it, and the script should be in a single line and separated by \n. Also save ethe result of the training in a file called {state['Last_DF']}_model.pkl, and the path should be relative to the notebook that will be running the scripts.",
+                                
+                            {'}'}```""")
+                            ]
+
+    logging.info(f"Message Sent to AI")
+    ai_message = model_GPT.invoke(messages)
+    logging.info(f"Message Sent to AI")
+    ai_message2 = model_GPT.invoke(messages)
+    logging.info(ai_message2.content)
+    raw_content2 = ai_message2.content.strip()
+    logging.info(f"Claude raw response:final {raw_content2}")
+
+    json_text = None
+    if raw_content2.startswith("json"):
+        start_index = raw_content2.find("json") + len("json")
+        end_index = raw_content2.find("", start_index)
+        json_text = raw_content2[start_index:end_index].strip()
+    elif raw_content2.startswith(""):
+        json_text = raw_content2.strip("").strip()
+    else:
+        json_text = raw_content2  # Try parsing whatever we get
+    try:
+        parsed_json3 = json.loads(json_text[7:-3])
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to parse Claude response:\n{json_text}")
+        raise ValueError("Claude's response was not valid JSON.") from e
+    logging.info(f"Claude raw response: {parsed_json3}")
+    Final_Scripts = parsed_json3.get("LScripts", "No Last DF returned")
+    Final_Reqs = parsed_json3.get("LRequiremenets", "No Last Model returned")
+
+    return {'FinalReqs': Final_Reqs, 'FinalScripts': Final_Scripts}
+
+
 
 
 graph_builder.add_node(into_data_frames, "into_data_frames")
 graph_builder.add_node(generate_analysis, "generate_analysis")
 graph_builder.add_node(call_notebook_service, "call_notebook_service")
+graph_builder.add_node(analyze_images, "analyze_images")
+graph_builder.add_node(generate_train, "generate_train")
 
 graph_builder.add_edge("into_data_frames", "generate_analysis")
 graph_builder.add_edge("generate_analysis", "call_notebook_service")
-
+graph_builder.add_edge("call_notebook_service", "analyze_images")
+graph_builder.add_edge("analyze_images", "generate_train")
 graph_builder.set_entry_point("into_data_frames")
-graph_builder.set_finish_point("call_notebook_service")
+graph_builder.set_finish_point("generate_train")
 
 graph2 = graph_builder.compile()
 
@@ -317,7 +522,15 @@ def test_graph2():
         'Pictures_Analysis': {},
         'Reqs': {},
         'DF_Info': {},
-        'executed_notebook': {}
+        'executed_notebook': {},
+        'chosen_models': {},
+        'explained_models': {},
+        'FinalReqs': {},
+        'FinalScripts': {},
+        'Last_Analysis': {},
+        'Last_Model': {},
+        'Last_DF': {}
+
 
     }
 
@@ -346,6 +559,17 @@ def run_graph2(data: dict) -> State:
         'Analysis':{},
         'Pictures':{},
         'Pictures_Analysis':{},
+        'Reqs': {},
+        'scripts': {}, 
+        'executed_notebook': {},
+        'chosen_models': {},
+        'explained_models': {},
+        'FinalReqs': {},
+        'FinalScripts': {},
+        'Last_Analysis': {},
+        'Last_Model': {},
+        'Last_DF': {}
+
         }
     
     print(initial_state)
@@ -362,7 +586,21 @@ def run_graph2(data: dict) -> State:
         'Analysis': final_state2.get('Analysis', {}),
         'DF_Info': final_state2.get('DF_Info', {}),
         'Pictures': final_state2.get('Pictures', {}),
-        'Pictures_Analysis': final_state2.get('Pictures_Analysis', {})
+        'Pictures_Analysis': final_state2.get('Pictures_Analysis', {}),
+        'Reqs': final_state2.get('Reqs', {}),
+        'scripts': final_state2.get('scripts', {}),
+        'executed_notebook': final_state2.get('executed_notebook', {}),
+        'chosen_models': final_state2.get('chosen_models', {}),
+        'explained_models': final_state2.get('explained_models', {}),
+        'FinalReqs': final_state2.get('FinalReqs', {}),
+        'FinalScripts': final_state2.get('FinalScripts', {}),
+        'Last_Analysis': final_state2.get('Last_Analysis', ''),
+        'Last_Model': final_state2.get('Last_Model', ''),
+        'Last_DF': final_state2.get('Last_DF', '')
+
+
+
+
     }
     
 
