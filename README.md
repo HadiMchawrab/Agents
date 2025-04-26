@@ -8,11 +8,13 @@ Just upload your CSV files, and let AI Consult analyze, recommend, and implement
  - Docker
 
 ## Installation
+Clone the repository
 ```bash
-# Clone the repository
 git clone https://github.com/HadiMchawrab/Agents.git
 cd Agents
-# Start docker
+```
+Start docker
+```bash
 docker-compose up --build
 ```
 
