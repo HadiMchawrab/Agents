@@ -221,7 +221,7 @@ def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
                 file_handle = open(csv_file, 'rb')
                 file_handles.append(file_handle)
                 # Add to files list in the correct format for requests
-                files.append(('files', (f'file_{table_name}', file_handle, 'text/csv')))
+                files.append(('files', (table_name, file_handle, 'text/csv')))
                 logger.debug(f"Created file handle and added to files list for {table_name}")
             except Exception as e:
                 logger.error(f"Error creating file handle: {str(e)}")
@@ -283,6 +283,7 @@ def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
                     logger.debug(f"Removed temporary file: {csv_file}")
             except Exception as e:
                 logger.error(f"Error cleaning up {csv_file}: {str(e)}")
+
 
 def call_notebook_service(state: State) -> State:
     """
@@ -445,9 +446,9 @@ def generate_train(state: State) -> State:
     )),
     HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:     
                 ```json
-                            {'{'},
+                            {'{'}
                                 "LRequiremenets": "All the requirements to be installed to run the below scripts seperated by a single space between each requirement, and the requirements should be in a single line",
-                                "LScripts": "Generate a full python text, which would run the dataframe {state['Last_DF']} and train the model {stringified_model} on it, and the script should be in a single line and separated by \n. Also save ethe result of the training in a file called {state['Last_DF']}_model.pkl, and the path should be relative to the notebook that will be running the scripts.",
+                                "LScripts": "Generate a full python text, which would run the dataframe {state['Last_DF']} and train the model {stringified_model} on it, and the script should be in a single line and separated by \n. Also save ethe result of the training in a file called {state['Last_DF']}_model.pkl, and the path should be relative to the notebook that will be running the scripts."
                                 
                             {'}'}```""")
                             ]

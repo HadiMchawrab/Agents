@@ -67,16 +67,6 @@ def convert_numpy_types(obj):
     else:
         return obj
 
-# @router.post("/upload-and-process")
-# async def test_frontend():
-#     RETURN_FILE = os.path.join(os.path.dirname(__file__), "return2.json")
-
-#     with open(RETURN_FILE, "r", encoding="utf-8") as file:
-#         return_text = json.load(file)
-        
-#     return return_text
- 
-
 @router.post("/upload-and-process")
 async def upload_and_process(request: Request, files: List[UploadFile] = File(...)):
     try:
@@ -166,8 +156,6 @@ async def upload_and_process(request: Request, files: List[UploadFile] = File(..
         )
 
 
-    
-        
 @router.post("/submit-data")
 async def submit_data(request_data: dict):
     try:

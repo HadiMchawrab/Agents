@@ -120,7 +120,9 @@ const TopicDetailsPage = () => {
         });
       });
     }
-    
+    console.log('GPT_Columns full:', topic.GPT_Columns);
+    console.log('All GPT-selected tables and columns:', allGptData);
+
     // Convert Sets to Arrays
     const mergedTables = {};
     Object.entries(allGptData).forEach(([tableName, columnsSet]) => {
@@ -128,8 +130,15 @@ const TopicDetailsPage = () => {
     });
     
     console.log('Initial GPT-selected tables and columns:', mergedTables);
-    
+
     // Then merge user-selected columns
+    // Ensure all GPT tables are initialized even if user selects no columns
+dropdownRows.forEach(row => {
+  if (row.selectedTable && !mergedTables[row.selectedTable]) {
+    mergedTables[row.selectedTable] = []; // Initialize table if user selects it but no columns
+  }
+});
+
     dropdownRows.forEach(row => {
       if (row.selectedTable && row.selectedColumns.length > 0) {
         if (mergedTables[row.selectedTable]) {
@@ -156,24 +165,13 @@ const TopicDetailsPage = () => {
 
     console.log('Submission data:', submissionData);
 
-    // Navigate to analysis page immediately
+    // Navigate to analysis with all the data
     navigate('/analysis', { 
       state: { 
         topic: topic,
         tables: mergedTables,
         submissionData: submissionData
       }
-    });
-
-    // Start the submission in the background
-    fetch('http://localhost:5000/submit-data', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(submissionData)
-    }).catch(error => {
-      console.error('Error submitting data:', error);
     });
   };
 

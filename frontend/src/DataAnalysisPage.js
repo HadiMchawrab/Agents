@@ -16,27 +16,18 @@ const DataAnalysisPage = () => {
         );
     }
 
-    // Function to convert bytes to data URL
-    const bytesToDataUrl = (bytes) => {
-        // Convert the byte array to base64
-        const base64 = btoa(
-            bytes.reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-        return `data:image/png;base64,${base64}`;
-    };
-
     return (
         <div className="data-analysis-page">
             <h1>Data Analysis Results</h1>
             
-            {Object.entries(images_bytes).map(([tableName, imageByteArrays]) => (
+            {Object.entries(images_bytes).map(([tableName, imageStrings]) => (
                 <div key={tableName} className="table-section">
                     <h2>{tableName} Analysis</h2>
                     <div className="graphs-grid">
-                        {imageByteArrays.map((imageBytes, index) => (
+                        {imageStrings.map((base64String, index) => (
                             <div key={index} className="graph-container">
                                 <img 
-                                    src={bytesToDataUrl(imageBytes)} 
+                                    src={`data:image/png;base64,${base64String}`}
                                     alt={`${tableName} Analysis Graph ${index + 1}`}
                                     className="analysis-graph"
                                     onError={(e) => {
