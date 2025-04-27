@@ -1,0 +1,111 @@
+.analysis-page {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 1rem;
+}
+
+.analysis-page h1 {
+  color: #2196f3;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.analysis-content {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.analysis-page h2 {
+  color: #333;
+  margin-bottom: 1.5rem;
+}
+
+.selected-data {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.data-item {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.data-item h4 {
+  color: #495057;
+  margin-bottom: 0.5rem;
+}
+
+.data-item p {
+  color: #666;
+  line-height: 1.6;
+}
+
+.loading-message {
+  text-align: center;
+  padding: 2rem;
+}
+
+.loading-message p {
+  margin-bottom: 0.5rem;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #2196f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 2rem auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-message {
+  color: #dc3545;
+  text-align: center;
+  padding: 2rem;
+}
+
+.error-message button {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+  cursor: pointer;
+}
+
+.error-message button:hover {
+  background: #c82333;
+}
+
+.analysis-results {
+  padding: 1rem;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.analysis-results pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #212529;
+}

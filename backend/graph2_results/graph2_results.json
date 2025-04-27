@@ -1,0 +1,42 @@
+{
+    "tables": [
+        {
+            "data": [
+                "Bankrupt?",
+                "ROA(C) before interest and depreciation before interest",
+                "Total debt/Total net worth",
+                "Debt ratio %",
+                "Cash Flow to Liability",
+                "Net Income to Total Assets",
+                "Liability to Equity"
+            ]
+        }
+    ],
+    "adjusted_columns": {
+        "data": [
+            "Bankrupt?:int64"
+        ]
+    },
+    "csv_files": [
+        "csv_test/banking.csv",
+        "csv_test/data.csv"
+    ],
+    "topic": "Machine learning models employed in bankruptcy prediction",
+    "Relationship": [
+        "The bankruptcy prediction models (XGBoost, SVM, Borderline-SVM SMOTE) directly align with the 'data' table which contains the 'Bankrupt?' target variable and numerous financial indicators that serve as predictive features. These models can analyze the complex relationships between financial ratios, profitability metrics, and leverage indicators to predict company bankruptcy risk."
+    ],
+    "ML_Models": [
+        "Random Forest",
+        "Gradient Boosting",
+        "Neural Networks",
+        "Logistic Regression",
+        "XGBoost",
+        "Support Vector Machines (SVM)",
+        "Borderline-SVM SMOTE"
+    ],
+    "Analysis": {},
+    "DF_Info": {},
+    "Pictures": {},
+    "Pictures_Analysis": {},
+    "images_bytes": {}
+}

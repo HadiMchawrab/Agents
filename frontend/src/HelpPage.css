@@ -1,0 +1,71 @@
+.help-page {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.help-page h1 {
+  color: #2196f3;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.help-content {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.help-section {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.help-section:last-child {
+  margin-bottom: 0;
+}
+
+.help-section h2 {
+  color: #495057;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.help-section p {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.help-section ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.help-section li {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+}
+
+.help-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.help-button {
+  background-color: #2196f3;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.help-button:hover {
+  background-color: #1976d2;
+} 
