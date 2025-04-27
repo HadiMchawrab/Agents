@@ -602,10 +602,10 @@ def check_array_size(shape):
             raise
         
         try:
-            # Use localhost:7000 instead of notebook:7000 to avoid hostname resolution issues
+            # Use notebook:7000 instead of localhost:7000 when running in Docker
             logger.debug(f"Sending POST request to notebook service train-data endpoint")
             response = requests.post(
-                "http://localhost:7000/train-data",
+                "http://notebook:7000/train-data",
                 data=data,
                 files=files,
                 timeout=600  # 10 minute timeout
