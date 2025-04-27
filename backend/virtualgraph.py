@@ -162,7 +162,7 @@ def scrape_node(state: State):
         ML_MOD = state["ML_Models1"]
         logging.info(f"ML_MOD: {ML_MOD}") 
         logging.info(f"Disected: {Disected}")
-        scr_into_str = "\n".join(scrape_remote(topic, limit=6))
+        scr_into_str = "\n".join(scrape_remote(query=topic, limit=1))
         articles[topic] = scr_into_str
 
 

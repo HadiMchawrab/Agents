@@ -12,6 +12,7 @@ from contextlib import contextmanager
 import os
 import textwrap
 import base64
+import glob
 
 
 # Configure logging
@@ -41,20 +42,11 @@ class AnalysisRequest(BaseModel):
     reqs: str
     scripts: str
 
-def encode_image_to_base64(image_path):
-    try:
-        with open(image_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-            return encoded_string
-    except Exception as e:
-        logger.error(f"Error encoding image {image_path}: {str(e)}")
-        return None
-
 @router.post("/analyze-data")
 def data_analysis(
     reqs: str = Form(...),
     scripts: str = Form(...),
-    files: List[UploadFile] = File(default=...)
+    files: List[UploadFile] = File(...)
 ):
     logger.info("Starting data analysis request")
     logger.debug(f"Received requirements: {reqs}")
@@ -64,7 +56,7 @@ def data_analysis(
     temp_files = []
     notebook_filename = 'temp_notebook.ipynb'
     executed_notebook_filename = 'executed_notebook.ipynb'
-    output_dir = '/notebook_output'  # Base output directory
+    output_dir = '/notebook_output'
     
     results = {}
     
@@ -87,7 +79,7 @@ def data_analysis(
                 os.makedirs(table_dir, mode=0o777, exist_ok=True)
                 logger.debug(f"Created table-specific directory: {table_dir}")
 
-                # Fix the script to use correct path - replace any nested paths with the correct structure
+                # Fix the script to use correct path
                 modified_script = scripts_dict[table_name]
                 modified_script = modified_script.replace(
                     f"'{table_name}/{table_name}_figure_",
@@ -103,7 +95,7 @@ def data_analysis(
         except json.JSONDecodeError as e:
             logger.error(f"JSON parsing failed: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
-        
+
         if not files:
             logger.error("No files were provided in the request")
             raise HTTPException(status_code=400, detail="No files were provided")
@@ -122,6 +114,7 @@ def data_analysis(
                 logger.debug(f"Extracted table name: {table_name} from filename: {file.filename}")
             
             try:
+                # Synchronously read file contents
                 contents = file.file.read()
                 logger.debug(f"Successfully read contents of file: {file.filename}")
             except Exception as e:
@@ -188,7 +181,7 @@ import os
 %matplotlib inline
 plt.style.use('seaborn-v0_8')
 
-# Create output directory for figures
+# Create output directory for figures in shared volume
 os.makedirs('/notebook_output', exist_ok=True)""")
             nb.cells.append(setup_cell)
             
@@ -207,8 +200,17 @@ os.makedirs('/notebook_output', exist_ok=True)""")
 
             nb.cells.append(df_cell)
 
-            # Fourth cell: Modify the script to use the output directory
-            modified_script = script.replace("plt.savefig('", f"plt.savefig('/notebook_output/{tablename}/")
+            # Fourth cell: Modify the script to use the shared volume output directory
+            # Create subdirectory for each table in the output dir
+            table_dir_cell = new_code_cell(f"""
+            # Create subdirectory for {tablename} if it doesn't exist
+            os.makedirs('/notebook_output/{tablename}', exist_ok=True)
+            """)
+            nb.cells.append(table_dir_cell)
+            
+            # Update the script to use the shared volume path
+            modified_script = script.replace("'{tablename}/", "'/notebook_output/{tablename}/")
+            modified_script = modified_script.replace("notebook_output/", "/notebook_output/")
             script_cell = new_code_cell(modified_script)
             nb.cells.append(script_cell)
 
@@ -226,6 +228,8 @@ os.makedirs('/notebook_output', exist_ok=True)""")
             # Execute the notebook using synchronous subprocess
             logger.info("Executing notebook")
             try:
+                import subprocess
+                
                 cmd = [
                     'jupyter', 'nbconvert', 
                     '--to', 'notebook',
@@ -259,53 +263,36 @@ os.makedirs('/notebook_output', exist_ok=True)""")
                 temp_files.append(executed_notebook_filename)
                 logger.info("Notebook execution completed successfully")
 
-                logger.debug(f"Reading executed notebook: {executed_notebook_filename}")
-                with open(executed_notebook_filename) as f:
-                    executed_nb = f.read()
-
-                # Collect results per table
-                results[tablename] = {
-                    "executed_notebook": executed_nb,
-                }
-
-            except subprocess.TimeoutExpired:
-                logger.error("Notebook execution timed out")
-                raise HTTPException(status_code=504, detail="Notebook execution timed out")
             except Exception as e:
                 logger.error(f"Error during notebook execution: {str(e)}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"Error during notebook execution: {str(e)}")
-        
-        encoded_images = {}
-        for tablename in dfs.keys():
-            table_dir = '/notebook_output/' + tablename + '/'
-            if os.path.exists(table_dir):
-                # Get all image files in the directory
-                image_files = [f for f in os.listdir(table_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
-                
-                # Encode each image
-                table_images = {}
-                for img_file in image_files:
-                    img_path = os.path.join(table_dir, img_file)
-                    encoded_img = encode_image_to_base64(img_path)
-                    if encoded_img:
-                        table_images[img_file] = encoded_img
-                
-                if table_images:
-                    encoded_images[tablename] = table_images
+            
+        # Collect and encode figures
+        image_data = {}
+        for table_name in dfs.keys():
+            logger.debug(f"Collecting figures for table: {table_name}")
+            image_files = glob.glob(f"/notebook_output/{table_name}/{table_name}_figure_*.png")
+            logger.debug(f"Found {len(image_files)} image files for {table_name}")
+            image_data[table_name] = []
+            
+            for image_file in image_files:
+                try:
+                    with open(image_file, "rb") as img_f:
+                        encoded = base64.b64encode(img_f.read()).decode('utf-8')
+                        image_data[table_name].append(encoded)
+                        logger.debug(f"Successfully encoded image: {image_file}")
+                except Exception as e:
+                    logger.error(f"Error encoding image {image_file}: {str(e)}")
+                    # Continue with other images even if one fails
+                    continue
+
+        # Return success response with images
+        return {
+            "message": "Analysis completed successfully",
+            "status": "success",
+            "images": image_data
+        }
     
-    finally:
-        # Clean up temporary files
-        for temp_file in temp_files:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                    logger.debug(f"Cleaned up temporary file: {temp_file}")
-            except Exception as e:
-                logger.error(f"Error cleaning up {temp_file}: {str(e)}")
-    
-    # Return both the notebook execution results and encoded images
-    logger.info("Returning analysis results")
-    return {
-        "results": results,
-        "images": encoded_images
-    }
+    except Exception as e:
+        logger.error(f"Unexpected error in data analysis: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

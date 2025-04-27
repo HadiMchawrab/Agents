@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './AnalysisPage.css';
 
@@ -6,9 +6,9 @@ const AnalysisPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { topic, tables, submissionData } = location.state || {};
-  const [analysisResult, setAnalysisResult] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     if (!submissionData) {
@@ -20,6 +20,9 @@ const AnalysisPage = () => {
     console.log('Submission data in AnalysisPage:', submissionData);
     console.log('Tables in AnalysisPage:', tables);
 
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController();
+
     const pollForResults = async () => {
       try {
         const response = await fetch('http://localhost:5000/submit-data', {
@@ -27,7 +30,8 @@ const AnalysisPage = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(submissionData)
+          body: JSON.stringify(submissionData),
+          signal: abortControllerRef.current.signal
         });
 
         if (!response.ok) {
@@ -37,26 +41,38 @@ const AnalysisPage = () => {
 
         const data = await response.json();
         console.log('Analysis results received:', data);
-        setAnalysisResult(data);
-        setIsLoading(false);
-
-        // Navigate to data analysis page with the results including images_bytes
-        navigate('/data-analysis', { 
-          state: { 
-            analysisResult: data,
-            tables: submissionData.tables, // Use tables from submissionData instead
-            images_bytes: data.images_bytes 
-          } 
-        });
+        
+        // Only proceed with navigation if the component is still mounted
+        if (abortControllerRef.current) {
+          setIsLoading(false);
+          navigate('/data-analysis', { 
+            state: { 
+              analysisResult: data,
+              tables: submissionData.tables,
+              images_bytes: data.images
+            } 
+          });
+        }
       } catch (err) {
-        console.error('Error in analysis:', err);
-        setError(err.message);
-        setIsLoading(false);
+        // Only update state if the error is not from aborting
+        if (err.name !== 'AbortError') {
+          console.error('Error in analysis:', err);
+          setError(err.message);
+          setIsLoading(false);
+        }
       }
     };
 
     pollForResults();
-  }, [submissionData, navigate]);
+
+    // Cleanup function to abort any ongoing fetch when component unmounts
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, [submissionData, navigate, tables]);
 
   if (!topic || !tables) {
     return <div className="analysis-page">No data available for analysis</div>;
@@ -67,6 +83,7 @@ const AnalysisPage = () => {
       <h1>Analysis in Progress</h1>
       <div className="analysis-content">
         <h2>Topic: {topic.topic}</h2>
+        
         <div className="selected-data">
           <h3>Selected Tables and Columns:</h3>
           {submissionData && Object.entries(submissionData.tables).map(([tableName, columns], index) => (
@@ -76,6 +93,7 @@ const AnalysisPage = () => {
             </div>
           ))}
         </div>
+
         <div className="analysis-status">
           {isLoading ? (
             <div className="loading-message">
@@ -87,11 +105,6 @@ const AnalysisPage = () => {
             <div className="error-message">
               <p>Error: {error}</p>
               <button onClick={() => navigate(-1)}>Go Back</button>
-            </div>
-          ) : analysisResult ? (
-            <div className="analysis-results">
-              <h3>Analysis Results:</h3>
-              <pre>{JSON.stringify(analysisResult, null, 2)}</pre>
             </div>
           ) : null}
         </div>
