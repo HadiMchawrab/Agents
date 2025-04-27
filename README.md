@@ -30,13 +30,13 @@ _The pipeline communicates with an LLM by sending well designed prompts and rece
 
 2. Topic Inference
    The system analyzes the metadata to find interesting topics and ML models that could be used on this data.
-   The agent then does some web scraping to find real life applied models in each topic.
+   The agent then does some web scraping to find real life applied models in each topic. This could take up to 25 minutes. You can check the logging to see scraping progress (selenium container).
 
-3. Human in the loop
+4. Human in the loop
    The topics scraped are displayed to the user, each with the reasoning behind it, the relationship between the data and the models, the data needs for a scpecific task/model, and a list of possible ML models to be applied.
    The user selects one topic to move forward with, and has the possibility of adding extra data to the analysis.
 
-4. Automated Data Analysis
+5. Automated Data Analysis
    The system analyzes data structure & types, and visualizes distributions, correlations, and patterns.
    This is done by generating python scripts taking into account the type and shape of the data, and then executing them in an isolated jupyter notebook.
    The resulting images are sent to the next stage of the pipeline: ML model choice.
@@ -45,5 +45,9 @@ _The pipeline communicates with an LLM by sending well designed prompts and rece
    The system chooses the best-fit ML model(s) based on data characteristics, and generates a training and/or running script of the model on the selected data.
 
 8. Model Training & Evaluation
-   The selected model is trained on your data, and key performance metrics are shared back to the pipeline which will improve the script to be executed again...
-   This back and forth keeps going until the results are convincing.
+   The selected model is trained on your data, and key performance metrics are shared.
+   The final results are currently shown in the terminal.
+
+## Further adjusments
+- Training results displayed in the frontend
+- Creating a loop between performance metrics and the executable script for model optimization.
