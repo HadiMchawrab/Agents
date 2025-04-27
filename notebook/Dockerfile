@@ -1,17 +1,20 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-WORKDIR /app
+# Set working directory
+WORKDIR /backend
 
+# Copy requirements first for better caching
 COPY requirements.txt .
-
 RUN pip install -r requirements.txt
 
-# Copy the entire notebook directory
-COPY . /app/notebook/
+# Create notebook output directory and set permissions
+RUN mkdir -p /notebook_output && chmod -R 777 /notebook_output
 
-# Make sure we're in the right directory
-WORKDIR /app/notebook
+# Copy app code
+COPY . .
 
+# Expose FastAPI port
 EXPOSE 7000
 
+# Run the app
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7000", "--reload"]

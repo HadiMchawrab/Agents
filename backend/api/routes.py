@@ -169,79 +169,45 @@ async def upload_and_process(request: Request, files: List[UploadFile] = File(..
     
         
 @router.post("/submit-data")
-async def submit_data(data: SubmitDataRequest):
+async def submit_data(request_data: dict):
     try:
-
-        print(data)
-        # Read CSV files from graph_results.json
-        graph_results_path = os.path.join("graph_results", "graph_results.json")
-        if not os.path.exists(graph_results_path):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No graph results available. Please upload and process CSV files first."
-            )
-            
-        with open(graph_results_path, 'r', encoding='utf-8') as f:
-            graph_results = json.load(f)
-            
-        csv_files = set(graph_results.get('csv_files', []))
+        logger.info("Received submit-data request")
+        logger.debug(f"Request data: {request_data}")
         
-        if not csv_files:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No CSV files found in previous analysis"
-            )
+        # Create the csv_files set with all required CSV files
+        csv_files = set()
+        for table_name in request_data.get('tables', {}):
+            csv_file = f"csv_test/{table_name}.csv"
+            if os.path.exists(csv_file):
+                csv_files.add(csv_file)
+            else:
+                logger.error(f"CSV file not found: {csv_file}")
+                raise HTTPException(status_code=404, detail=f"CSV file not found: {table_name}.csv")
 
-        # Log the incoming data for debugging
-        logger.debug(f"Received data from frontend: {data}")
+        # Update request_data with csv_files
+        request_data['csv_files'] = csv_files
         
-        # Create initial state with the data
-        initial_state = {
-            'tables': data.tables,
-            'topic': data.topic,
-            'csv_files': csv_files,
-            'ML_Models': data.ML_Models,
-            'Relationship': data.Relationship
-        }
-
-        # Log the initial state for debugging
-        logger.debug(f"Created initial state: {initial_state}")
-        
-    
         try:
-            logger.debug("Starting graph execution")
-            result = run_graph2(initial_state)
-            logger.debug("Graph execution completed")
-            
-            # Save the result to a JSON file
-            output_dir = "graph2_results"
-            os.makedirs(output_dir, exist_ok=True)
-            full_path = os.path.join(output_dir, "graph2_results.json")
-            
-            with open(full_path, "w", encoding="utf-8") as f:
-                json.dump(convert_sets(result), f, indent=4, ensure_ascii=False)
-            
-            logger.info(f"Graph results saved to {full_path}")
-
+            result = run_graph2(request_data)
+            logger.info("Successfully processed submit-data request")
             return result
-
-
         except Exception as e:
-            logger.error(f"Error processing request: {str(e)}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Error processing submit-data request: {e}", exc_info=True)
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=500,
                 detail={
                     'status': 'error',
                     'message': str(e),
                     'traceback': traceback.format_exc()
                 }
             )
-        
     except Exception as e:
-        logger.error(f"Error processing submit-data request: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in submit-data endpoint: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=500,
+            detail={
+                'status': 'error',
+                'message': str(e),
+                'traceback': traceback.format_exc()
+            }
         )

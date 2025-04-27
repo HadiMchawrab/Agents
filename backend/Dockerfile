@@ -26,6 +26,8 @@ COPY requirements.txt .
 
 RUN pip install -r requirements.txt 
 
+# Create notebook output directory and set permissions
+RUN mkdir -p /notebook_output && chmod -R 777 /notebook_output
 
 # Copy app code
 COPY . .

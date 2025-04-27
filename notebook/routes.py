@@ -64,14 +64,14 @@ def data_analysis(
     temp_files = []
     notebook_filename = 'temp_notebook.ipynb'
     executed_notebook_filename = 'executed_notebook.ipynb'
-    output_dir = 'notebook_output'
+    output_dir = '/notebook_output'  # Base output directory
     
     results = {}
     
     try:
-        # Create output directory for figures
-        os.makedirs(output_dir, exist_ok=True)
-        logger.debug(f"Created output directory: {output_dir}")
+        # Create base output directory with full permissions
+        os.makedirs(output_dir, mode=0o777, exist_ok=True)
+        logger.debug(f"Created base output directory: {output_dir}")
         
         # Parse the JSON strings into Python dictionaries
         logger.debug("Attempting to parse JSON data")
@@ -80,6 +80,26 @@ def data_analysis(
             scripts_dict = json.loads(scripts)
             logger.debug(f"Successfully parsed JSON. Requirements keys: {list(reqs_dict.keys())}")
             logger.debug(f"Scripts keys: {list(scripts_dict.keys())}")
+            
+            # Create table-specific directories with full permissions
+            for table_name in scripts_dict.keys():
+                table_dir = os.path.join(output_dir, table_name)
+                os.makedirs(table_dir, mode=0o777, exist_ok=True)
+                logger.debug(f"Created table-specific directory: {table_dir}")
+
+                # Fix the script to use correct path - replace any nested paths with the correct structure
+                modified_script = scripts_dict[table_name]
+                modified_script = modified_script.replace(
+                    f"'{table_name}/{table_name}_figure_",
+                    f"'/notebook_output/{table_name}/{table_name}_figure_"
+                )
+                modified_script = modified_script.replace(
+                    f"'/notebook_output/{table_name}/notebook_output/{table_name}/",
+                    f"'/notebook_output/{table_name}/"
+                )
+                scripts_dict[table_name] = modified_script
+                logger.debug(f"Updated script paths for {table_name}")
+
         except json.JSONDecodeError as e:
             logger.error(f"JSON parsing failed: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
@@ -169,7 +189,7 @@ import os
 plt.style.use('seaborn-v0_8')
 
 # Create output directory for figures
-os.makedirs('notebook_output', exist_ok=True)""")
+os.makedirs('/notebook_output', exist_ok=True)""")
             nb.cells.append(setup_cell)
             
             # Third cell: Load df
@@ -188,7 +208,7 @@ os.makedirs('notebook_output', exist_ok=True)""")
             nb.cells.append(df_cell)
 
             # Fourth cell: Modify the script to use the output directory
-            modified_script = script.replace("plt.savefig('", "plt.savefig('notebook_output/")
+            modified_script = script.replace("plt.savefig('", f"plt.savefig('/notebook_output/{tablename}/")
             script_cell = new_code_cell(modified_script)
             nb.cells.append(script_cell)
 
@@ -257,7 +277,7 @@ os.makedirs('notebook_output', exist_ok=True)""")
         
         encoded_images = {}
         for tablename in dfs.keys():
-            table_dir = 'notebook_output/' + tablename + '/'
+            table_dir = '/notebook_output/' + tablename + '/'
             if os.path.exists(table_dir):
                 # Get all image files in the directory
                 image_files = [f for f in os.listdir(table_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]

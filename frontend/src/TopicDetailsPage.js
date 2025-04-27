@@ -105,26 +105,38 @@ const TopicDetailsPage = () => {
   };
 
   const handleContinue = async () => {
-    // Get GPT-selected columns
-    const gptData = getGptTablesAndColumns();
+    // Get ALL GPT-selected columns from all tables (not just the first one)
+    const allGptData = {};
+    if (topic?.GPT_Columns) {
+      topic.GPT_Columns.forEach(gptSet => {
+        gptSet.forEach(tableObj => {
+          Object.entries(tableObj).forEach(([tableName, columns]) => {
+            if (!allGptData[tableName]) {
+              allGptData[tableName] = new Set(columns);
+            } else {
+              columns.forEach(col => allGptData[tableName].add(col));
+            }
+          });
+        });
+      });
+    }
     
-    // Create merged tables object
+    // Convert Sets to Arrays
     const mergedTables = {};
-    
-    // First add GPT-selected columns
-    Object.entries(gptData).forEach(([table, columns]) => {
-      mergedTables[table] = [...columns];
+    Object.entries(allGptData).forEach(([tableName, columnsSet]) => {
+      mergedTables[tableName] = Array.from(columnsSet);
     });
+    
+    console.log('Initial GPT-selected tables and columns:', mergedTables);
     
     // Then merge user-selected columns
     dropdownRows.forEach(row => {
       if (row.selectedTable && row.selectedColumns.length > 0) {
         if (mergedTables[row.selectedTable]) {
-          // Add to existing table's columns
-          mergedTables[row.selectedTable] = [
-            ...mergedTables[row.selectedTable],
-            ...row.selectedColumns
-          ];
+          // Add to existing table's columns, avoiding duplicates
+          const existingColumns = new Set(mergedTables[row.selectedTable]);
+          row.selectedColumns.forEach(col => existingColumns.add(col));
+          mergedTables[row.selectedTable] = Array.from(existingColumns);
         } else {
           // Create new table entry
           mergedTables[row.selectedTable] = [...row.selectedColumns];
@@ -132,7 +144,9 @@ const TopicDetailsPage = () => {
       }
     });
 
-    // Data for backend - ensure data matches Pydantic model
+    console.log('Final merged tables with all columns:', mergedTables);
+
+    // Data for backend
     const submissionData = {
       topic: topic.topic,
       Relationship: Array.from(topic.Relationship || []),
@@ -140,12 +154,14 @@ const TopicDetailsPage = () => {
       tables: mergedTables
     };
 
+    console.log('Submission data:', submissionData);
+
     // Navigate to analysis page immediately
     navigate('/analysis', { 
       state: { 
         topic: topic,
         tables: mergedTables,
-        submissionData: submissionData // Pass the submission data to be used by AnalysisPage
+        submissionData: submissionData
       }
     });
 

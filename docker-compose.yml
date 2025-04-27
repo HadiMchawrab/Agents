@@ -24,6 +24,7 @@ services:
       - "5000:5000"
     volumes:
       - ./backend:/backend
+      - notebook_shared:/notebook_output
     environment:
       - ENVIRONMENT=development
       - DEBUG=1
@@ -52,10 +53,14 @@ services:
       - "7000:7000"
     volumes:
       - ./notebook:/backend
+      - notebook_shared:/notebook_output
     networks:
       - app-network
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  notebook_shared:
 

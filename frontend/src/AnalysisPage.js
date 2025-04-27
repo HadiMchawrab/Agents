@@ -17,6 +17,9 @@ const AnalysisPage = () => {
       return;
     }
 
+    console.log('Submission data in AnalysisPage:', submissionData);
+    console.log('Tables in AnalysisPage:', tables);
+
     const pollForResults = async () => {
       try {
         const response = await fetch('http://localhost:5000/submit-data', {
@@ -28,10 +31,12 @@ const AnalysisPage = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch analysis results');
+          const errorData = await response.text();
+          throw new Error(`Failed to fetch analysis results: ${errorData}`);
         }
 
         const data = await response.json();
+        console.log('Analysis results received:', data);
         setAnalysisResult(data);
         setIsLoading(false);
 
@@ -39,18 +44,19 @@ const AnalysisPage = () => {
         navigate('/data-analysis', { 
           state: { 
             analysisResult: data,
-            tables,
+            tables: submissionData.tables, // Use tables from submissionData instead
             images_bytes: data.images_bytes 
           } 
         });
       } catch (err) {
+        console.error('Error in analysis:', err);
         setError(err.message);
         setIsLoading(false);
       }
     };
 
     pollForResults();
-  }, [submissionData, navigate, tables]);
+  }, [submissionData, navigate]);
 
   if (!topic || !tables) {
     return <div className="analysis-page">No data available for analysis</div>;
@@ -63,7 +69,7 @@ const AnalysisPage = () => {
         <h2>Topic: {topic.topic}</h2>
         <div className="selected-data">
           <h3>Selected Tables and Columns:</h3>
-          {Object.entries(tables).map(([tableName, columns], index) => (
+          {submissionData && Object.entries(submissionData.tables).map(([tableName, columns], index) => (
             <div key={index} className="data-item">
               <h4>Table: {tableName}</h4>
               <p>Columns: {columns.join(', ')}</p>

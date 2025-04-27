@@ -16,8 +16,9 @@ import pandas as pd
 import json
 import logging
 from dotenv import load_dotenv
-import asyncio
+import requests
 
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 if not load_dotenv():
@@ -119,30 +120,40 @@ def generate_analysis(state: State) -> State:
                                                 The scripts will be run in a single code cell, I dont want you to gererate big ammounts of code, just the scripts to run on the data frame to generate the analysis and get visualization and not to run models, limit the scripts to 200 lines of code max
                                                 As a result of the scripts, I need to get pictures such as relationships between the columns, heat maps and so on.
                                                 """), 
-                     HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:
-                                ``` json
+                     HumanMessage(content = f"""Return the response **only** in this strict JSON format, with no additional text or explanations:
+                                 ```json
                                     {'{'}
                                         "Reqs": "All the requirements to be installed to run the below scripts seperated by a single space between each requirement, and the requirements should be in a single line",
                                         "Scripts": "You will continue working assuming that there is pandas dataframe called {table_name} which is defined to have these columns {adjusted_columns_str}. 
-                                        You shouldn't re-write the before lines continue from there. 
-                                        Your goal: generate a full working code, knowing that you need to generate images and analysis and give a set of visualizations of this current dataframe (which is given, so you shouldn't write it in your code, assume you have a dataframe called {table_name} ) we need to make analysis of the data to understand more how we can use ML models to tackle this topic {state['topic']}. Your goal is not to write an ML algorithm but just to provided illustraiotns analysis, distributions, heatmpas, boxplots, correlation table ... on the dataframe called: {table_name}.
-                                        The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 200 lines of code max, which will be running in a single code cell) and call the dataframe "{table_name}", exactly as it is. 
+                                                    You shouldn't re-write the before lines continue from there. 
+                                                    Your goal: generate a full working code, knowing that you need to generate images and analysis and give a set of visualizations of this current dataframe (which is given, so you shouldn't write it in your code, assume you have a dataframe called {table_name} ) we need to make analysis of the data to understand more how we can use ML models to tackle this topic {state['topic']}. Your goal is not to write an ML algorithm but just to provided illustraiotns analysis, distributions, heatmpas, boxplots, correlation table ... on the dataframe called: {table_name}.
+                                                    The scripts to run on the data frame to generate the analysis and get a set of visualizations not to train the models on our dataset, but rather to get visualizations on the data we have which would be relevant to use later when we want to choose the best ML Model , you can also either use the whole data frame or choose a subset of the columns (limit the scripts to 200 lines of code max, which will be running in a single code cell) and call the dataframe "{table_name}", exactly as it is. 
 
-                                        IF you want to show the correlation table, you dont need columns that are strings, you should look at the columns that have type either int or float using this info {adjusted_columns_str}, and you can use the correlation table.                                        
-                                        Also make use of other relationships between the columns and the ML models to generate the analysis and get visualizations, while taking into consideration the type of the data you are using in order not to get an error. 
+                                                    IF you want to show the correlation table, you dont need columns that are strings, you should look at the columns that have type either int or float using this info {adjusted_columns_str}, and you can use the correlation table.                                        
+                                                    Also make use of other relationships between the columns and the ML models to generate the analysis and get visualizations, while taking into consideration the type of the data you are using in order not to get an error. 
+                                                    
 
-                                        Now the path that you will be saving the pictures in is 'notebook_output/{table_name}/' and the name of the picture should be '{table_name}_figure_1.png' and so on, and the path should be relative to the notebook that will be running the scripts.
-                                        
-
-                                        Rules: 
-                                        Inside your working directory which is notebook_output, 
-                                        You need to create a subdirectory for this table name = {table_name} in the notebook_output directory, and save the pictures in it. 
-                                        Example of the path: {table_name}/{table_name}_figure_1.png
-                                                             {table_name}/{table_name}_figure_2.png
-                                        And so on. "
-                                    {'}'}
-                                    ```
-                                    YOU NEED TO RETURN THE JSON RESPONSE ONLY, STARTING with json and ending with , so I can parse it easily
+                                                    Rules: 
+                                                    Inside your working directory which is notebook_output, 
+                                                    You need to create a subdirectory for this table name = {table_name} in the main directory: notebook_directory, which is already created so no need to recreate notebook_output, and save the pictures in it. 
+                                                    
+                                                    And so on.
+                                                    
+                                                    
+                                                    Example of the code you should generate:
+                                                    in python:
+                                                        
+                                                        os.makedirs('{table_name}', exist_ok=True)
+                                                        plt.title('Correlation Matrix')
+                                                        plt.savefig('notebook_output/{table_name}/{table_name}_figure_1.png')
+                                                        plt.savefig('notebook_output/{table_name}/{table_name}_figure_2.png')
+                                                        plt.savefig('notebook_output/{table_name}/{table_name}_figure_3.png')
+                                                        plt.savefig('notebook_output/{table_name}/{table_name}_figure_4.png')
+                                                        plt.savefig('notebook_output/{table_name}/{table_name}_figure_5.png')
+                                                    Dont generate code inside a for loop, it will give an error in tha naming and saving of the files, just generate the code to save the figures in the above format, and dont add any other paths or directories to the directory I just gave you in teh 5 above examples, in any figure you want to save, use the above convention, just 2 directories and the file name
+                                                    Dont add any other paths or directories to the directory I just gave you in teh 5 above examples, in any figure you want to save, use the above convention, just 2 directories and the file name"
+                                    {'}'}```
+                                    YOU NEED TO RETURN THE JSON RESPONSE ONLY, STARTING with ```json and ending with ```, so I can parse it easily
                                     """),
                      HumanMessage(content = f"""The topic is: {state['topic']}"""),
                      HumanMessage(content = f"""The columns in this data frame are: {adjusted_columns_str}"""),
@@ -178,18 +189,10 @@ def generate_analysis(state: State) -> State:
         
     return {'Analysis': ans, 'Reqs': Reqs, 'scripts': scripts}
 
-import httpx
 
-async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
+def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
     logger = logging.getLogger(__name__)
     logger.info("Starting send_to_notebook function")
-    logger.debug(f"Received reqs keys: {list(reqs.keys())}")
-    logger.debug(f"Received scripts keys: {list(scripts.keys())}")
-    logger.debug(f"Received dataframes keys: {list(dfs.keys())}")
-
-    # Since we're running in Docker and the services are in the same network,
-    # we can use localhost because the backend container has its own network namespace
-    notebook_url = 'http://localhost:7000'
     
     csvs = []
     file_handles = []
@@ -202,7 +205,7 @@ async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
         # Convert DataFrames to CSV files and prepare files dict
         for table_name, df in dfs.items():
             logger.info(f"Processing table: {table_name}")
-            csv_file = f"csv_adjusted/{table_name}.csv"  # Include .csv extension
+            csv_file = f"csv_adjusted/{table_name}.csv"
             logger.debug(f"Saving DataFrame to {csv_file}")
             
             try:
@@ -217,7 +220,7 @@ async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
                 # Open file and create file handle
                 file_handle = open(csv_file, 'rb')
                 file_handles.append(file_handle)
-                # Add to files list in the correct format for httpx
+                # Add to files list in the correct format for requests
                 files.append(('files', (f'file_{table_name}', file_handle, 'text/csv')))
                 logger.debug(f"Created file handle and added to files list for {table_name}")
             except Exception as e:
@@ -227,49 +230,40 @@ async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
         # Prepare the data as JSON strings
         try:
             data = {
-                'reqs': (None, json.dumps(reqs)),
-                'scripts': (None, json.dumps(scripts))
+                'reqs': json.dumps(reqs),
+                'scripts': json.dumps(scripts)
             }
             logger.debug("Successfully prepared JSON data")
         except Exception as e:
             logger.error(f"Error preparing JSON data: {str(e)}")
             raise
         
-        # Use async context manager with increased timeouts
-        timeout_settings = httpx.Timeout(
-            timeout=600.0,  # 10 minutes for the entire operation
-            connect=60.0,   # 1 minute for connecting
-            read=600.0,     # 10 minutes for reading
-            write=60.0      # 1 minute for writing
-        )
-        
-        logger.info("Preparing to send request to notebook service")
-        async with httpx.AsyncClient(timeout=timeout_settings) as client:
-            try:
-                logger.debug(f"Sending POST request to notebook service with {len(files)} files")
-                response = await client.post(
-                    notebook_url + "/analyze-data",
-                    data=data,
-                    files=files
-                )
-                logger.debug(f"Received response with status code: {response.status_code}")
-                
-                if response.status_code == 422:
-                    logger.error(f"Validation error response: {response.text}")
-                    return {"error": f"Request validation failed: {response.text}"}
-                
-                response_json = response.json()
-                logger.info("Successfully received and parsed response from notebook service")
-                return response_json
-            except httpx.TimeoutException as e:
-                logger.error(f"Timeout error while sending data to notebook service: {str(e)}")
-                return {"error": "Request timed out while sending data to notebook service"}
-            except httpx.RequestError as e:
-                logger.error(f"Error sending request to notebook service: {str(e)}")
-                return {"error": f"Failed to send request to notebook service: {str(e)}"}
-            except Exception as e:
-                logger.error(f"Unexpected error while communicating with notebook service: {str(e)}", exc_info=True)
-                return {"error": f"Unexpected error: {str(e)}"}
+        try:
+            logger.debug(f"Sending POST request to notebook service with {len(files)} files")
+            response = requests.post(
+                "http://notebook:7000/analyze-data",
+                data=data,
+                files=files,
+                timeout=600  # 10 minute timeout
+            )
+            logger.debug(f"Received response with status code: {response.status_code}")
+            
+            if response.status_code == 422:
+                logger.error(f"Validation error response: {response.text}")
+                return {"error": f"Request validation failed: {response.text}"}
+            
+            response_json = response.json()
+            logger.info("Successfully received and parsed response from notebook service")
+            return response_json
+        except requests.Timeout:
+            logger.error("Timeout error while sending data to notebook service")
+            return {"error": "Request timed out while sending data to notebook service"}
+        except requests.RequestException as e:
+            logger.error(f"Error sending request to notebook service: {str(e)}")
+            return {"error": f"Failed to send request to notebook service: {str(e)}"}
+        except Exception as e:
+            logger.error(f"Unexpected error while communicating with notebook service: {str(e)}", exc_info=True)
+            return {"error": f"Unexpected error: {str(e)}"}
     
     finally:
         logger.debug("Starting cleanup process")
@@ -292,15 +286,20 @@ async def send_to_notebook(reqs: dict, scripts: dict, dfs: dict):
 
 def call_notebook_service(state: State) -> State:
     """
-    Async node to call the notebook FastAPI service and return the executed notebook.
+    Node to call the notebook FastAPI service and return the executed notebook.
     """
+    logger = logging.getLogger(__name__)
     reqs = state.get("Reqs", {})
     scripts = state.get("scripts", {})
     dfs = state.get("data_frames", {})
     
-    notebook_result = asyncio.run(send_to_notebook(reqs, scripts, dfs))
-    state["executed_notebook"] = notebook_result
-    return state
+    try:
+        notebook_result = send_to_notebook(reqs, scripts, dfs)
+        state["executed_notebook"] = notebook_result
+        return state
+    except Exception as e:
+        logger.error(f"Error in call_notebook_service: {str(e)}")
+        raise
 
 
 def analyze_images(state: State) -> State:
@@ -310,83 +309,77 @@ def analyze_images(state: State) -> State:
     Last_Model = str
     Last_DF = str
 
-    pictures = state['executed_notebook']['images']
+    # Get table names from the data_frames state
+    table_names = list(state['data_frames'].keys())
+    logger.info(f"Processing tables: {table_names}")
+    
+    for table_name in table_names:
+        table_image_messages = []
+        j = 1
+        
+        while True:
+            image_path = f"/notebook_output/{table_name}/{table_name}_figure_{j}.png"
+            logger.debug(f"Checking for image: {image_path}")
+            
+            if not os.path.exists(image_path):
+                logger.debug(f"No more images found for table {table_name} after {j-1} images")
+                break
+                
+            try:
+                with open(image_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                    table_image_messages.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{b64}"}
+                    })
+                    logger.debug(f"Successfully encoded image {j} for table {table_name}")
+            except Exception as e:
+                logger.error(f"Error processing image {image_path}: {str(e)}")
+                break
+                
+            j += 1
+            
+        if table_image_messages:  # Only analyze if we found images
+            messages = [
+                SystemMessage(content=(
+                    "You are an expert data scientist. "
+                    "Analyze the set of exploratory plots provided and extract key insights "
+                    "about data distribution, feature relationships, and any anomalies. "
+                    "Then recommend the single best ML model for this dataset."
+                )),
+                HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:     
+                            ```json
+                                        {'{'}
+                                            "RecommendedModel": "one of the set of ML models: {state['ML_Models']}, and the model should be in a single line",
+                                            "Insights": "Why we chose this model based on the analysis of the images"
+                                        {'}'}```"""),
+                HumanMessage(content=table_image_messages)
+            ]
 
-    # pictures = {
-    #     "banking": [
-    #         "notebook_output/banking/banking_figure_1.png",
-    #         "notebook_output/banking/banking_figure_2.png",
-    #         "notebook_output/banking/banking_figure_3.png",
-    #         "notebook_output/banking/banking_figure_4.png",
-    #         "notebook_output/banking/banking_figure_5.png",
-    #     ],
-    #     "data": [
-    #         "notebook_output/data/data_figure_1.png",
-    #         "notebook_output/data/data_figure_2.png",
-    #         "notebook_output/data/data_figure_3.png",
-    #         "notebook_output/data/data_figure_4.png",
-    #         "notebook_output/data/data_figure_5.png",
-    #         "notebook_output/data/data_figure_6.png",
-    #         "notebook_output/data/data_figure_7.png",
-    #         "notebook_output/data/data_figure_8.png",
-    #         "notebook_output/data/data_figure_9.png",
-    #     ],
-    # }
+            try:
+                logging.info(f"Sending analysis request for table {table_name}")
+                ai_message = model_GPT.invoke(messages)
+                logging.info(ai_message.content)
+                raw_content = ai_message.content.strip()
 
-    state["Pictures_Analysis"] = {}
-    for table, paths in pictures.items():
-        image_messages = []
-        for png_path in paths:
-            with open(png_path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-            image_messages.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64}"}
-            })
+                json_text = None
+                if raw_content.startswith("json"):
+                    start_index = raw_content.find("json") + len("json")
+                    end_index = raw_content.find("", start_index)
+                    json_text = raw_content[start_index:end_index].strip()
+                elif raw_content.startswith(""):
+                    json_text = raw_content.strip("").strip()
+                else:
+                    json_text = raw_content
 
-        # 2) Compose the chat messages
-        messages = [
-            SystemMessage(content=(
-                "You are an expert data scientist. "
-                "Analyze the set of exploratory plots provided and extract key insights "
-                "about data distribution, feature relationships, and any anomalies. "
-                "Then recommend the single best ML model for this dataset."
-            )),
-            HumanMessage(content = f"""Return the response *only* in this strict JSON format, with no additional text or explanations:     
-                        ```json
-                                    {'{'}
-                                        "RecommendedModel": "one of the set of ML models: {state['ML_Models']}, and the model should be in a single line",
-                                        "Insights": "Why we chose this model based on the analysis of the images",
-                                        
-                                    {'}'}```"""),
-            HumanMessage(content=image_messages)
-        ]
+                parsed_json = json.loads(json_text[7:-3])
+                ml_mod[table_name] = parsed_json.get("RecommendedModel", "No Model returned")
+                model_analysis[table_name] = parsed_json.get("Insights", "No Insights returned")
+            except Exception as e:
+                logger.error(f"Error analyzing images for table {table_name}: {str(e)}")
+                ml_mod[table_name] = "Analysis failed"
+                model_analysis[table_name] = f"Error: {str(e)}"
 
-        logging.info(f"Message Sent to AI")
-        ai_message = model_GPT.invoke(messages)
-        logging.info(ai_message.content)
-        raw_content = ai_message.content.strip()
-        logging.info(f"Claude raw response: {raw_content}")
-
-        json_text = None
-        if raw_content.startswith("json"):
-            start_index = raw_content.find("json") + len("json")
-            end_index = raw_content.find("", start_index)
-            json_text = raw_content[start_index:end_index].strip()
-        elif raw_content.startswith(""):
-            json_text = raw_content.strip("").strip()
-        else:
-            json_text = raw_content  # Try parsing whatever we get
-        try:
-            parsed_json = json.loads(json_text[7:-3])
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse Claude response:\n{json_text}")
-            raise ValueError("Claude's response was not valid JSON.") from e
-
-        ml_mod[table] = parsed_json.get("RecommendedModel", "No Insights returned")
-        model_analysis[table] = parsed_json.get("Insights", "No Model returned")
-    logging.info(f"Model Analysis: {model_analysis}")
-    logging.info(f"ML Models: {ml_mod}")
     stringified_models_analysis = str(state['explained_models'])
     stringified_models = str(state['chosen_models'])
 
