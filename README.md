@@ -17,6 +17,7 @@ Start docker
 ```bash
 docker-compose up --build
 ```
+Create a .env file inside the backend directory, with CLAUDE_API_KEY, LANGSMITH_API_KEY, and OPENAI_API_KEY.
 
 ## Workflow
 _The pipeline communicates with an LLM by sending well designed prompts and receiving formatted responses that are forwared from stage to stage._
@@ -38,7 +39,7 @@ _The pipeline communicates with an LLM by sending well designed prompts and rece
    The resulting images are sent to the next stage of the pipeline: ML model choice.
 
 6. ML Model Recommendation
-   The system chooses the best-fit ML model(s) based on data characteristics, and generates a training and/or running script of the model on the selected data
+   The system chooses the best-fit ML model(s) based on data characteristics, and generates a training and/or running script of the model on the selected data.
 
 8. Model Training & Evaluation
    The selected model is trained on your data, and key performance metrics are shared back to the pipeline which will improve the script to be executed again...
