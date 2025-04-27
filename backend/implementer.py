@@ -28,7 +28,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 if not CLAUDE_API_KEY:
     raise ValueError("CLAUDE_API_KEY is not set. Please check your .env file.")
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 model = ChatAnthropic(model_name="claude-3-7-sonnet-20250219", temperature=0, anthropic_api_key=CLAUDE_API_KEY, max_tokens = 8192 )
 model_GPT  = ChatOpenAI(model_name="gpt-4o", temperature=0, openai_api_key=os.getenv("OPENAI_API_KEY"), max_tokens = 4052)
 
@@ -296,7 +295,6 @@ def call_notebook_service(state: State) -> State:
     
     try:
         notebook_result = send_to_notebook(reqs, scripts, dfs)
-        state["executed_notebook"] = notebook_result
         return state
     except Exception as e:
         logger.error(f"Error in call_notebook_service: {str(e)}")
@@ -309,6 +307,7 @@ def analyze_images(state: State) -> State:
     Last_Analysis = str
     Last_Model = str
     Last_DF = str
+    images_bytes = {}  # Store base64 encoded images per table
 
     # Get table names from the data_frames state
     table_names = list(state['data_frames'].keys())
@@ -316,6 +315,7 @@ def analyze_images(state: State) -> State:
     
     for table_name in table_names:
         table_image_messages = []
+        table_images = []  # Store images for this table
         j = 1
         
         while True:
@@ -333,12 +333,16 @@ def analyze_images(state: State) -> State:
                         "type": "image_url",
                         "image_url": {"url": f"data:image/png;base64,{b64}"}
                     })
+                    table_images.append(b64)  # Store the base64 string
                     logger.debug(f"Successfully encoded image {j} for table {table_name}")
             except Exception as e:
                 logger.error(f"Error processing image {image_path}: {str(e)}")
                 break
                 
             j += 1
+        
+        if table_images:  # Store images for this table if any were found
+            images_bytes[table_name] = table_images
             
         if table_image_messages:  # Only analyze if we found images
             messages = [
@@ -428,7 +432,7 @@ def analyze_images(state: State) -> State:
 
 
 
-    return {'chosen_models': Last_Model, 'explained_models': Last_Analysis, 'Last_DF': Last_DF}
+    return {'chosen_models': Last_Model, 'explained_models': Last_Analysis, 'Last_DF': Last_DF, 'images_bytes': images_bytes}
 
 
 
@@ -482,6 +486,199 @@ def generate_train(state: State) -> State:
     return {'FinalReqs': Final_Reqs, 'FinalScripts': Final_Scripts}
 
 
+def send_to_training(reqs: str, scripts: str, dfs: dict):
+    """
+    Sends a single dataframe with requirements and scripts to the notebook service
+    for training data analysis.
+    
+    Args:
+        reqs (str): Requirements string for pip installation (not a JSON string)
+        scripts (str): The script to run on the dataframe (not a JSON string)
+        dfs (dict): Dictionary with a single key-value pair of table_name:dataframe
+    
+    Returns:
+        dict: The response from the notebook service with training analysis results
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Starting send_to_training function")
+    
+    if len(dfs) != 1:
+        logger.error(f"Expected 1 dataframe, got {len(dfs)}")
+        return {"error": f"Expected 1 dataframe, got {len(dfs)}"}
+    
+    csvs = []
+    file_handles = []
+    try:
+        # Create csv_adjusted directory if it doesn't exist
+        os.makedirs("csv_adjusted", exist_ok=True)
+        logger.debug("Created csv_adjusted directory")
+        
+        # Get the single table name and dataframe
+        table_name = list(dfs.keys())[0]
+        df = dfs[table_name]
+        
+        # Add memory optimization for larger dataframes
+        if df.shape[0] * df.shape[1] > 100000:  # If dataframe is large
+            logger.info(f"Large dataframe detected with shape {df.shape}, applying memory optimization")
+            # Downcast numeric columns
+            for col in df.columns:
+                if df[col].dtype == 'float64':
+                    df[col] = pd.to_numeric(df[col], downcast='float')
+                elif df[col].dtype == 'int64':
+                    df[col] = pd.to_numeric(df[col], downcast='integer')
+            # Convert object columns to category if appropriate
+            for col in df.select_dtypes(include=['object']):
+                if df[col].nunique() < df.shape[0] // 2:
+                    df[col] = df[col].astype('category')
+            logger.info("Memory optimization applied to dataframe")
+        
+        logger.info(f"Processing table for training: {table_name}")
+        csv_file = f"csv_adjusted/{table_name}.csv"
+        logger.debug(f"Saving DataFrame to {csv_file}")
+        
+        try:
+            # Save with less memory usage for large dataframes
+            if df.shape[0] > 100000:
+                logger.info(f"Large dataframe detected, saving in chunks")
+                chunk_size = 50000
+                for i in range(0, df.shape[0], chunk_size):
+                    chunk = df.iloc[i:i+chunk_size]
+                    if i == 0:
+                        chunk.to_csv(csv_file, index=False, mode='w')
+                    else:
+                        chunk.to_csv(csv_file, index=False, mode='a', header=False)
+                logger.debug(f"Successfully saved DataFrame in chunks to {csv_file}")
+            else:
+                df.to_csv(csv_file, index=False)
+                logger.debug(f"Successfully saved DataFrame to {csv_file}")
+            csvs.append(csv_file)
+        except Exception as e:
+            logger.error(f"Error saving DataFrame to CSV: {str(e)}")
+            raise
+        
+        try:
+            # Open file and create file handle
+            file_handle = open(csv_file, 'rb')
+            file_handles.append(file_handle)
+            # Add to files for the request - keep the file name as is
+            files = [('file', (table_name, file_handle, 'text/csv'))]
+            logger.debug(f"Created file handle and added to files list for {table_name}")
+        except Exception as e:
+            logger.error(f"Error creating file handle: {str(e)}")
+            raise
+
+        # Add memory safety guards to the scripts
+        if "import" in scripts and "gc" not in scripts:
+            # Add garbage collection imports and calls
+            scripts = "import gc\n" + scripts
+            scripts += "\n\n# Final cleanup\ngc.collect()"
+        
+        # Ensure we're not creating huge arrays
+        if "np.array" in scripts or "np.zeros" in scripts or "np.ones" in scripts:
+            logger.info("Detected potential large array creation in scripts, adding safety checks")
+            memory_guard = """
+# Memory safety checks
+def check_array_size(shape):
+    size_bytes = np.prod(shape) * 8  # Assuming float64 (8 bytes)
+    size_gb = size_bytes / (1024**3)
+    if size_gb > 1:  # Warn if more than 1GB
+        print(f"WARNING: Operation would create array of {size_gb:.2f} GB")
+        if size_gb > 10:  # Error if more than 10GB
+            raise MemoryError(f"Operation would require {size_gb:.2f} GB of memory")
+        return False
+    return True
+"""
+            scripts = memory_guard + "\n" + scripts
+        
+        # Prepare the data - send as is, no need for json.dumps
+        try:
+            data = {
+                'reqs': reqs + " psutil", # Add psutil for memory monitoring
+                'scripts': scripts
+            }
+            logger.debug("Successfully prepared data")
+        except Exception as e:
+            logger.error(f"Error preparing data: {str(e)}")
+            raise
+        
+        try:
+            # Use localhost:7000 instead of notebook:7000 to avoid hostname resolution issues
+            logger.debug(f"Sending POST request to notebook service train-data endpoint")
+            response = requests.post(
+                "http://localhost:7000/train-data",
+                data=data,
+                files=files,
+                timeout=600  # 10 minute timeout
+            )
+            logger.debug(f"Received response with status code: {response.status_code}")
+            
+            if response.status_code == 422:
+                logger.error(f"Validation error response: {response.text}")
+                return {"error": f"Request validation failed: {response.text}"}
+            
+            response_json = response.json()
+            logger.info("Successfully received and parsed response from notebook service")
+            return response_json
+        except requests.Timeout:
+            logger.error("Timeout error while sending data to notebook service")
+            return {"error": "Request timed out while sending data to notebook service"}
+        except requests.RequestException as e:
+            logger.error(f"Error sending request to notebook service: {str(e)}")
+            return {"error": f"Failed to send request to notebook service: {str(e)}"}
+        except Exception as e:
+            logger.error(f"Unexpected error while communicating with notebook service: {str(e)}", exc_info=True)
+            return {"error": f"Unexpected error: {str(e)}"}
+    
+    finally:
+        logger.debug("Starting cleanup process")
+        # Close all file handles
+        for handle in file_handles:
+            try:
+                handle.close()
+                logger.debug("Closed file handle")
+            except Exception as e:
+                logger.error(f"Error closing file handle: {str(e)}")
+        
+        # Clean up temporary CSV files after handles are closed
+        for csv_file in csvs:
+            try:
+                if os.path.exists(csv_file):
+                    os.remove(csv_file)
+                    logger.debug(f"Removed temporary file: {csv_file}")
+            except Exception as e:
+                logger.error(f"Error cleaning up {csv_file}: {str(e)}")
+
+
+def call_notebook_train(state: State) -> State:
+    """
+    Node to call the notebook FastAPI service and return the executed notebook.
+    """
+    logger = logging.getLogger(__name__)
+    reqs = state.get("FinalReqs", "")  # Get FinalReqs as a string
+    scripts = state.get("FinalScripts", "")  # Get FinalScripts as a string
+    df_name = state.get("Last_DF", "")  # Get Last_DF as a string
+
+    # Create dictionary with a single dataframe
+    if df_name and df_name in state['data_frames']:
+        df_dict = {df_name: state['data_frames'][df_name]}
+    else:
+        logger.error(f"DataFrame {df_name} not found in data_frames")
+        df_dict = {}  # Empty dictionary if not found
+    
+    try:
+        # Call send_to_training with the string parameters
+        notebook_result = send_to_training(reqs, scripts, df_dict)
+        state["executed_training"] = notebook_result
+        return state
+    except Exception as e:
+        logger.error(f"Error in call_notebook_train: {str(e)}")
+        raise
+
+
+
+
+
+
 
 
 graph_builder.add_node(into_data_frames, "into_data_frames")
@@ -489,16 +686,17 @@ graph_builder.add_node(generate_analysis, "generate_analysis")
 graph_builder.add_node(call_notebook_service, "call_notebook_service")
 graph_builder.add_node(analyze_images, "analyze_images")
 graph_builder.add_node(generate_train, "generate_train")
+graph_builder.add_node(call_notebook_train, "call_notebook_train")
 
 graph_builder.add_edge("into_data_frames", "generate_analysis")
 graph_builder.add_edge("generate_analysis", "call_notebook_service")
 graph_builder.add_edge("call_notebook_service", "analyze_images")
 graph_builder.add_edge("analyze_images", "generate_train")
+graph_builder.add_edge("generate_train", "call_notebook_train")
 graph_builder.set_entry_point("into_data_frames")
-graph_builder.set_finish_point("generate_train")
+graph_builder.set_finish_point("call_notebook_train")
 
 graph2 = graph_builder.compile()
-
 
 def test_graph2():
     # Create a sample state
@@ -523,8 +721,9 @@ def test_graph2():
         'FinalScripts': {},
         'Last_Analysis': {},
         'Last_Model': {},
-        'Last_DF': {}
-
+        'Last_DF': {},
+        'executed_training': {},
+        'images_bytes': {}
 
     }
 
@@ -562,9 +761,10 @@ def run_graph2(data: dict) -> State:
         'FinalScripts': {},
         'Last_Analysis': {},
         'Last_Model': {},
-        'Last_DF': {}
-
-        }
+        'Last_DF': {},
+        'executed_training': {},
+        'images_bytes': {}
+    }
     
     print(initial_state)
     final_state2 = graph2.invoke(initial_state)
@@ -585,28 +785,14 @@ def run_graph2(data: dict) -> State:
         'scripts': final_state2.get('scripts', {}),
         'executed_notebook': final_state2.get('executed_notebook', {}),
         'chosen_models': final_state2.get('chosen_models', {}),
-        'explained_models': final_state2.get('explained_models', {}),
-        'FinalReqs': final_state2.get('FinalReqs', {}),
-        'FinalScripts': final_state2.get('FinalScripts', {}),
+        'explained_models': final_state2.get('explained_models', str),
+        'FinalReqs': final_state2.get('FinalReqs', str),
+        'FinalScripts': final_state2.get('FinalScripts', str),
         'Last_Analysis': final_state2.get('Last_Analysis', ''),
-        'Last_Model': final_state2.get('Last_Model', ''),
-        'Last_DF': final_state2.get('Last_DF', '')
-
-
-
-
+        'Last_DF': final_state2.get('Last_DF', ''),
+        'executed_training': final_state2.get('executed_training', {}),
+        'images_bytes': final_state2.get('images_bytes', {})
     }
-    
-
-    # return {
-    #     'tables': final_state2.get('tables', []),
-    #     'adjusted_columns': final_state2.get('adjusted_columns', {}),
-    #     'csv_files': list(final_state2.get('csv_files', [])),
-    #     'topic': final_state2.get('topic', ''),
-    #     'Relationship': final_state2.get('Relationship', ''),
-    #     'ML_Models': final_state2.get('ML_Models', []),
-    #     'Analysis': final_state2.get('Analysis', {})
-    # }
 
 
 if __name__ == "__main__":

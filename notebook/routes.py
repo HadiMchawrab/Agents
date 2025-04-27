@@ -267,32 +267,333 @@ os.makedirs('/notebook_output', exist_ok=True)""")
                 logger.error(f"Error during notebook execution: {str(e)}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"Error during notebook execution: {str(e)}")
             
-        # Collect and encode figures
-        image_data = {}
-        for table_name in dfs.keys():
-            logger.debug(f"Collecting figures for table: {table_name}")
-            image_files = glob.glob(f"/notebook_output/{table_name}/{table_name}_figure_*.png")
-            logger.debug(f"Found {len(image_files)} image files for {table_name}")
-            image_data[table_name] = []
-            
-            for image_file in image_files:
-                try:
-                    with open(image_file, "rb") as img_f:
-                        encoded = base64.b64encode(img_f.read()).decode('utf-8')
-                        image_data[table_name].append(encoded)
-                        logger.debug(f"Successfully encoded image: {image_file}")
-                except Exception as e:
-                    logger.error(f"Error encoding image {image_file}: {str(e)}")
-                    # Continue with other images even if one fails
-                    continue
-
-        # Return success response with images
+        # Simply return success since files are saved in volume
         return {
             "message": "Analysis completed successfully",
-            "status": "success",
-            "images": image_data
+            "status": "success"
         }
     
     except Exception as e:
         logger.error(f"Unexpected error in data analysis: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up only temporary files, not output files
+        for file in temp_files:
+            try:
+                if os.path.exists(file) and ('temp_' in file or file in [notebook_filename, executed_notebook_filename]):
+                    os.remove(file)
+                    logger.debug(f"Cleaned up temporary file: {file}")
+            except Exception as e:
+                logger.error(f"Error cleaning up {file}: {str(e)}")
+
+
+
+@router.post("/train-data")
+def train_data(
+    reqs: str = Form(...),
+    scripts: str = Form(...),
+    file: UploadFile = File(...)
+):
+    logger.info("Starting training data request")
+    logger.debug(f"Received requirements: {reqs}")
+    logger.debug(f"Received scripts: {scripts}")
+    logger.debug(f"Received file: {file.filename}")
+
+    temp_files = []
+    notebook_filename = 'temp_training_notebook.ipynb'
+    executed_notebook_filename = 'executed_training_notebook.ipynb'
+    output_dir = '/notebook_output'
+    
+    try:
+        # Create base output directory with full permissions
+        os.makedirs(output_dir, mode=0o777, exist_ok=True)
+        logger.debug(f"Created base output directory: {output_dir}")
+        
+        # Create temporary directory for CSV files
+        logger.debug("Creating temporary directory for CSV files")
+        os.makedirs("temp_csv", exist_ok=True)
+        
+        # Process the single file
+        table_name = file.filename
+        if table_name.startswith('file_'):
+            table_name = table_name[5:]  # Remove 'file_' prefix
+            logger.debug(f"Extracted table name: {table_name} from filename: {file.filename}")
+        
+        try:
+            # Synchronously read file contents
+            contents = file.file.read()
+            logger.debug(f"Successfully read contents of file: {file.filename}")
+        except Exception as e:
+            logger.error(f"Error reading file {file.filename}: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Error reading file {file.filename}: {str(e)}")
+
+        # Save CSV to temporary file
+        temp_csv = f"temp_csv/{table_name}.csv"
+        logger.debug(f"Saving contents to temporary file: {temp_csv}")
+        try:
+            with open(temp_csv, "wb") as f:
+                f.write(contents)
+            temp_files.append(temp_csv)
+            logger.debug(f"Successfully saved file: {temp_csv}")
+        except Exception as e:
+            logger.error(f"Error saving temporary file {temp_csv}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error saving temporary file: {str(e)}")
+
+        # Read the CSV file with memory optimization
+        try:
+            logger.debug(f"Attempting to read CSV file with memory optimization: {temp_csv}")
+            # Use low_memory=True and chunk processing for large files
+            try:
+                # First check file size
+                file_size_mb = os.path.getsize(temp_csv) / (1024 * 1024)
+                logger.debug(f"CSV file size: {file_size_mb:.2f} MB")
+                
+                # If file is large, use chunks to read
+                if file_size_mb > 100:  # More than 100MB
+                    logger.info(f"Large CSV detected ({file_size_mb:.2f} MB), using chunked reading")
+                    
+                    # Count the lines to display progress
+                    with open(temp_csv, 'r') as f:
+                        line_count = sum(1 for _ in f)
+                    logger.debug(f"CSV has {line_count} lines")
+                    
+                    # Read in smaller chunks
+                    chunk_size = min(100000, max(1000, line_count // 10))
+                    logger.debug(f"Reading in chunks of {chunk_size} rows")
+                    
+                    df = pd.read_csv(temp_csv, low_memory=True, chunksize=chunk_size)
+                    df = pd.concat([chunk for chunk in df], ignore_index=True)
+                else:
+                    df = pd.read_csv(temp_csv, low_memory=True)
+            except Exception as chunk_err:
+                logger.warning(f"Chunked reading failed: {str(chunk_err)}, falling back to standard reading")
+                df = pd.read_csv(temp_csv)
+                
+            # Memory optimization for numeric columns
+            for col in df.columns:
+                if df[col].dtype == 'float64':
+                    df[col] = pd.to_numeric(df[col], downcast='float')
+                elif df[col].dtype == 'int64':
+                    df[col] = pd.to_numeric(df[col], downcast='integer')
+                elif df[col].dtype == 'object':
+                    if df[col].nunique() < df.shape[0] // 2:
+                        df[col] = df[col].astype('category')
+                        
+            logger.debug(f"Successfully loaded optimized DataFrame for {table_name} with shape {df.shape}")
+        except Exception as e:
+            logger.error(f"Error reading CSV file {table_name}: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Error reading CSV file {table_name}: {str(e)}")
+        
+        # Create a new notebook
+        logger.debug("Creating new notebook")
+        nb = new_notebook()
+        
+        # Table subdirectory
+        os.makedirs(f"{output_dir}/{table_name}", mode=0o777, exist_ok=True)
+
+        # Add cells to notebook
+        logger.debug("Adding cells to notebook")
+        # First cell: Install requirements - Using the requirements string directly
+        install_cell = new_code_cell(f"""%%time
+!pip install {reqs} psutil""")
+        nb.cells.append(install_cell)
+        
+        # Second cell: Import statements and setup with memory monitoring
+        setup_cell = new_code_cell("""import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+import gc
+import psutil
+
+%matplotlib inline
+plt.style.use('seaborn-v0_8')
+
+# Create output directory for figures in shared volume
+os.makedirs('/notebook_output', exist_ok=True)
+
+# Monitor memory usage
+def get_memory_usage():
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    return f"Current memory usage: {mem_info.rss / (1024 * 1024):.2f} MB"
+
+print(get_memory_usage())
+
+# Memory optimization function
+def optimize_dataframe_memory(df):
+    start_mem = df.memory_usage().sum() / (1024*1024)
+    print(f"DataFrame memory usage before optimization: {start_mem:.2f} MB")
+    
+    for col in df.columns:
+        if df[col].dtype == 'float64':
+            df[col] = pd.to_numeric(df[col], downcast='float')
+        elif df[col].dtype == 'int64':
+            df[col] = pd.to_numeric(df[col], downcast='integer')
+        elif df[col].dtype == 'object':
+            if df[col].nunique() < df.shape[0] // 2:
+                df[col] = df[col].astype('category')
+                
+    end_mem = df.memory_usage().sum() / (1024*1024)
+    print(f"DataFrame memory usage after optimization: {end_mem:.2f} MB")
+    print(f"Memory decreased by {(start_mem - end_mem) / start_mem * 100:.1f}%")
+    
+    return df
+
+# Memory safety for array operations
+def safe_operation(operation_description, func, *args, **kwargs):
+    try:
+        print(f"Attempting: {operation_description}")
+        print(f"Memory before: {get_memory_usage()}")
+        result = func(*args, **kwargs)
+        print(f"Memory after: {get_memory_usage()}")
+        print(f"{operation_description} completed successfully")
+        return result
+    except Exception as e:
+        print(f"Error in {operation_description}: {str(e)}")
+        gc.collect()
+        print(f"Memory after error & garbage collection: {get_memory_usage()}")
+        raise
+""")
+        nb.cells.append(setup_cell)
+        
+        # Third cell: Load df with memory optimization
+        df_code = textwrap.dedent(f"""
+            # Load and preview the df with memory optimization
+            print("Loading dataframe...")
+            {table_name} = pd.read_csv('temp_csv/{table_name}.csv')
+            print("Initial load complete")
+            print(f"Original shape: {{{table_name}.shape}}")
+            
+            # Run garbage collection to free memory from read_csv operations
+            gc.collect()
+            print(get_memory_usage())
+            
+            # Apply memory optimization
+            {table_name} = optimize_dataframe_memory({table_name})
+            
+            # Sample data if it's too large
+            if {table_name}.shape[0] > 100000:
+                print(f"Dataframe is large ({{{table_name}.shape[0]}} rows), sampling 100,000 rows for analysis")
+                {table_name}_full = {table_name}  # Keep reference to full dataset
+                {table_name} = {table_name}.sample(n=100000, random_state=42)
+                print(f"Sampled shape: {{{table_name}.shape}}")
+            
+            print("\\nFirst few rows:")
+            print({table_name}.head())
+            print("Columns:", {table_name}.columns.tolist())
+            
+            # Run garbage collection again
+            gc.collect()
+            print(get_memory_usage())
+        """)
+        
+        df_cell = new_code_cell(df_code)
+        nb.cells.append(df_cell)
+
+        # Fourth cell: Create subdirectory for output
+        table_dir_cell = new_code_cell(f"""
+        # Create subdirectory for {table_name} if it doesn't exist
+        os.makedirs('/notebook_output/{table_name}', exist_ok=True)
+        """)
+        nb.cells.append(table_dir_cell)
+        
+        # Add memory profiling around user script
+        script_wrapper = f"""
+# Before script execution
+print("\\n--- Starting user script execution ---")
+print(get_memory_usage())
+
+try:
+    # Original user script
+{textwrap.indent(scripts, '    ')}
+    
+    # After script execution
+    print("\\n--- User script completed successfully ---")
+except Exception as script_error:
+    print(f"\\n--- Error in user script: {{str(script_error)}} ---")
+    # Try to continue and avoid full notebook failure
+    
+# Force garbage collection
+gc.collect()
+print(f"Final memory usage: {{get_memory_usage()}}")
+"""
+        
+        modified_script = script_wrapper.replace(f"'{table_name}/", f"'/notebook_output/{table_name}/")
+        modified_script = modified_script.replace("notebook_output/", "/notebook_output/")
+        script_cell = new_code_cell(modified_script)
+        nb.cells.append(script_cell)
+
+        # Write the notebook to a file
+        logger.debug(f"Writing notebook to file: {notebook_filename}")
+        try:
+            with open(notebook_filename, 'w') as f:
+                nbformat.write(nb, f)
+            temp_files.append(notebook_filename)
+            logger.debug(f"Successfully wrote notebook to {notebook_filename}")
+        except Exception as e:
+            logger.error(f"Error writing notebook file: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error writing notebook file: {str(e)}")
+
+        # Execute the notebook using synchronous subprocess
+        logger.info("Executing training notebook")
+        try:
+            import subprocess
+            
+            cmd = [
+                'jupyter', 'nbconvert', 
+                '--to', 'notebook',
+                '--execute',
+                '--ExecutePreprocessor.timeout=600',  # 10 minutes
+                '--ExecutePreprocessor.allow_errors=True',  # Continue on cell errors
+                notebook_filename,
+                '--output', executed_notebook_filename
+            ]
+            
+            logger.debug(f"Running command: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=600  # 10 minute timeout
+            )
+            
+            stdout_text = result.stdout
+            stderr_text = result.stderr
+            
+            logger.debug(f"Notebook execution stdout:\n{stdout_text}")
+            if stderr_text:
+                logger.error(f"Notebook execution stderr:\n{stderr_text}")
+            
+            if result.returncode != 0:
+                error_msg = stderr_text or "Unknown error"
+                logger.error(f"Training notebook execution failed with return code {result.returncode}. Error: {error_msg}")
+                raise HTTPException(status_code=500, detail=f"Training notebook execution failed: {error_msg}")
+
+            temp_files.append(executed_notebook_filename)
+            logger.info("Training notebook execution completed successfully")
+
+        except Exception as e:
+            logger.error(f"Error during training notebook execution: {str(e)}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error during training notebook execution: {str(e)}")
+        
+        # Simply return success since files are saved in volume
+        return {
+            "message": "Training analysis completed successfully",
+            "status": "success"
+        }
+    
+    except Exception as e:
+        logger.error(f"Unexpected error in training data analysis: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up only temporary files, not output files
+        for file in temp_files:
+            try:
+                if os.path.exists(file) and ('temp_' in file or file in [notebook_filename, executed_notebook_filename]):
+                    os.remove(file)
+                    logger.debug(f"Cleaned up temporary file: {file}")
+            except Exception as e:
+                logger.error(f"Error cleaning up {file}: {str(e)}")

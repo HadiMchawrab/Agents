@@ -40,18 +40,29 @@ const AnalysisPage = () => {
         }
 
         const data = await response.json();
-        console.log('Analysis results received:', data);
+        console.log('Full analysis results received:', data);
+        console.log('Images data:', data.images);
+        console.log('Chosen models:', data.chosen_models);
+        console.log('Explained models:', data.explained_models);
+        console.log('Final scripts:', data.FinalScripts);
         
         // Only proceed with navigation if the component is still mounted
         if (abortControllerRef.current) {
           setIsLoading(false);
-          navigate('/data-analysis', { 
-            state: { 
-              analysisResult: data,
-              tables: submissionData.tables,
-              images_bytes: data.images
-            } 
-          });
+          const analysisState = {
+            analysisResult: {
+              ...data,
+              additionalData: {
+                chosen_models: data.chosen_models,
+                explained_models: data.explained_models,
+                final_scripts: data.FinalScripts
+              }
+            },
+            tables: submissionData.tables,
+            images_bytes: data.images
+          };
+          console.log('State being passed to DataAnalysisPage:', analysisState);
+          navigate('/data-analysis', { state: analysisState });
         }
       } catch (err) {
         // Only update state if the error is not from aborting
