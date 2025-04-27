@@ -1,7 +1,9 @@
 # AI Consult
 EECE 490 Project on agentic workflow
+
 AI Consult is a fully automated agentic worflow designed to bridge the gap between non technical users (including companies) and AI solutions: 0 code experience required!
 Our agents take the user from raw data to a trained Machine Learning model seamlessly. 
+
 Just upload your CSV files, and let AI Consult analyze, recommend, and implement the best-fit ML model to solve your real-world problem.
 
 ## Prerequisites
@@ -13,11 +15,12 @@ Clone the repository
 git clone https://github.com/HadiMchawrab/Agents.git
 cd Agents
 ```
+Create a .env file inside the backend directory, with CLAUDE_API_KEY, LANGSMITH_API_KEY, and OPENAI_API_KEY.
+
 Start docker
 ```bash
 docker-compose up --build
 ```
-Create a .env file inside the backend directory, with CLAUDE_API_KEY, LANGSMITH_API_KEY, and OPENAI_API_KEY.
 
 ## Workflow
 _The pipeline communicates with an LLM by sending well designed prompts and receiving formatted responses that are forwared from stage to stage._
