@@ -1,0 +1,66 @@
+services:
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://backend:5000
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/backend
+      - notebook_shared:/notebook_output
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=1
+      - PYTHONUNBUFFERED=1
+      - NOTEBOOK_URL=http://notebook:7000
+    depends_on:
+      - selenium
+      - notebook
+    networks:
+      - app-network
+    
+  selenium:
+    image: selenium/standalone-chrome:latest
+    ports:
+      - "4444:4444"
+    shm_size: 2g
+    environment:
+      - SE_NODE_SESSION_TIMEOUT=180
+      - SE_NODE_MAX_SESSIONS=5
+    networks:
+      - app-network
+
+  notebook:
+    build: ./notebook
+    ports:
+      - "7000:7000"
+    volumes:
+      - ./notebook:/backend
+      - notebook_shared:/notebook_output
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  notebook_shared:
+
